@@ -1,0 +1,66 @@
+{
+  "menu": [
+    {
+      "id": "espresso",
+      "category": "Espresso",
+      "items": [
+        { "id": "esp1", "name": "Espresso", "description": "Klasický taliánsky shot", "price": 2.0 },
+        { "id": "esp2", "name": "Doppio", "description": "Dvojitý espresso shot", "price": 2.8 },
+        { "id": "esp3", "name": "Americano", "description": "Espresso s horúcou vodou", "price": 2.5 },
+        { "id": "esp4", "name": "Macchiato", "description": "Espresso s kvapkou mliečnej peny", "price": 2.8 }
+      ]
+    },
+    {
+      "id": "classics",
+      "category": "Klasika",
+      "items": [
+        { "id": "cls1", "name": "Cappuccino", "description": "Espresso s napenením mliekom", "price": 3.5 },
+        { "id": "cls2", "name": "Latte", "description": "Krémová káva s mliekom", "price": 3.8 },
+        { "id": "cls3", "name": "Flat White", "description": "Zamatová textúra, silná chuť", "price": 3.8 },
+        { "id": "cls4", "name": "Mocha", "description": "Espresso s čokoládou a mliekom", "price": 4.2 }
+      ]
+    },
+    {
+      "id": "specialty",
+      "category": "Špeciality",
+      "items": [
+        { "id": "spc1", "name": "Golden Lama", "description": "Náš podpis - med, levanduľa, espresso", "price": 4.5 },
+        { "id": "spc2", "name": "Karamelové Latte", "description": "Domáci karamelový sirup", "price": 4.2 },
+        { "id": "spc3", "name": "Matcha Latte", "description": "Prémiový japonský matcha", "price": 4.5 },
+        { "id": "spc4", "name": "Chai Latte", "description": "Korenistá zmes s mliekom", "price": 4.0 }
+      ]
+    }
+  ],
+  "schedule": [
+    { "id": "sch1", "day": "Pondelok", "location": "Námestie SNP", "address": "Námestie SNP, Bratislava", "time": "8:00 - 14:00" },
+    { "id": "sch2", "day": "Utorok", "location": "Mlynské nivy", "address": "Apollo Business Center", "time": "7:30 - 15:00" },
+    { "id": "sch3", "day": "Streda", "location": "Digital Park", "address": "Einsteinova ulica", "time": "8:00 - 14:00" },
+    { "id": "sch4", "day": "Štvrtok", "location": "Stará tržnica", "address": "Námestie SNP 25", "time": "9:00 - 16:00" },
+    { "id": "sch5", "day": "Piatok", "location": "Eurovea", "address": "Pribinova ulica", "time": "8:00 - 15:00" },
+    { "id": "sch6", "day": "Sobota", "location": "Farmárske trhy", "address": "Stará tržnica", "time": "8:00 - 13:00" }
+  ],
+  "gallery": [
+    { "id": "gal1", "src": "/images/gallery-1.jpg", "alt": "Golden Lama Coffee bicykel" },
+    { "id": "gal2", "src": "/images/gallery-2.jpg", "alt": "Príprava kávy" },
+    { "id": "gal3", "src": "/images/gallery-3.jpg", "alt": "Náš kávový bicykel v akcii" },
+    { "id": "gal4", "src": "/images/gallery-4.jpg", "alt": "Detail bicykla" }
+  ],
+  "content": {
+    "heroTagline": "Remeselná káva na kolesách",
+    "heroTitle": "Golden Lama Coffee",
+    "heroDescription": "Prinášame vám výnimočnú kávu priamo na ulice Bratislavy. Každý šálok je pripravený s láskou a vášňou pre kávu.",
+    "aboutSubtitle": "Náš príbeh",
+    "aboutTitle": "Káva s poslaním",
+    "aboutParagraphs": [
+      "Golden Lama Coffee vznikol s jednoduchou myšlienkou: priniesť výnimočnú kávu priamo k ľuďom, ktorí ju milujú. Vyzbrojení vintage bicyklom a snom sme sa rozhodli vytvoriť niečo výnimočné.",
+      "Dnes nás nájdete na miestnych trhoch, komunitných podujatiach a susedských stretnutiach. Každý šálok, ktorý podávame, nesie náš záväzok ku kvalite, udržateľnosti a jednoduchej radosti z dokonale pripravenej kávy.",
+      "Veríme, že skvelá káva by mala byť dostupná, etická a hlavne podávaná s úsmevom."
+    ],
+    "contactSubtitle": "Kontaktujte nás",
+    "contactTitle": "Spojme sa",
+    "contactDescription": "Máte záujem o náš kávový bicykel na vašu akciu? Alebo sa len chcete pozdraviť? Napíšte nám!",
+    "contactEmail": "ahoj@goldenlama.sk",
+    "instagramUrl": "https://instagram.com/goldenlamacoffee",
+    "facebookUrl": "https://facebook.com/goldenlamacoffee"
+  }
+}

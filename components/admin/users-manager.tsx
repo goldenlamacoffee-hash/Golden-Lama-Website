@@ -149,10 +149,12 @@ export function UsersManager({ currentUser, initialUsers, assignableRoles, capab
     setBusy(true)
     setError("")
     try {
+      const isSelf = editUser.id === currentUser.id
+      const payload = isSelf ? { name: editForm.name } : { name: editForm.name, role: editForm.role }
       const res = await fetch(`/api/admin/users/${editUser.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: editForm.name, role: editForm.role }),
+        body: JSON.stringify(payload),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -289,8 +291,11 @@ export function UsersManager({ currentUser, initialUsers, assignableRoles, capab
             </TableHeader>
             <TableBody>
               {users.map((u) => {
-                const manageable = canManage(u) && u.id !== currentUser.id
-                const selfRow = u.id === currentUser.id
+                    const manageable = canManage(u) && u.id !== currentUser.id
+                    const selfRow = u.id === currentUser.id
+                    // Users with write access can edit their own display name (role/active
+                    // changes stay blocked for self to preserve owner protection).
+                    const selfEditable = selfRow && canWrite
                 return (
                   <TableRow key={u.id} className="border-[#8C6F4E]/20 hover:bg-[#28170F]/40">
                     <TableCell className="text-[#F5E3C2] font-medium">
@@ -357,6 +362,17 @@ export function UsersManager({ currentUser, initialUsers, assignableRoles, capab
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </>
+                        )}
+                        {selfEditable && !manageable && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            title="Upraviť meno"
+                            onClick={() => openEdit(u)}
+                            className="text-[#F5E3C2] hover:bg-[#8C6F4E]/20 h-8 w-8"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
                     </TableCell>
@@ -463,6 +479,7 @@ export function UsersManager({ currentUser, initialUsers, assignableRoles, capab
               <Select
                 value={editForm.role}
                 onValueChange={(v) => setEditForm({ ...editForm, role: v as AdminRole })}
+                disabled={editUser?.id === currentUser.id}
               >
                 <SelectTrigger className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]">
                   <SelectValue />
@@ -475,6 +492,9 @@ export function UsersManager({ currentUser, initialUsers, assignableRoles, capab
                   ))}
                 </SelectContent>
               </Select>
+              {editUser?.id === currentUser.id && (
+                <p className="text-xs text-[#8C6F4E]">Vlastnú rolu nie je možné zmeniť.</p>
+              )}
             </div>
             {error && <p className="text-red-400 text-sm">{error}</p>}
           </div>

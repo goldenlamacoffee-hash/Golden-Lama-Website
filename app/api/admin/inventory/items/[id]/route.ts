@@ -10,6 +10,7 @@ import {
   type InventoryKind,
 } from '@/lib/inventory'
 import { validateInventoryItem, parseOptionalNumber } from '@/lib/validation'
+import { resolveVatPair, normalizeVatRate } from '@/lib/vat'
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const auth = await requireUser()
@@ -42,22 +43,49 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Neplatná požiadavka' }, { status: 400 })
   }
 
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k)
+
+  // Resolve effective values, falling back to existing ones for omitted fields.
+  const vatRate = normalizeVatRate(
+    has('vatRate') ? (parseOptionalNumber(body.vatRate) as number | null) : existing.vatRate,
+  )
+  const unitPrices = resolveVatPair({
+    withoutVat: has('unitPriceWithoutVat')
+      ? (parseOptionalNumber(body.unitPriceWithoutVat) as number | null)
+      : existing.unitPriceWithoutVat,
+    withVat: has('unitPriceWithVat')
+      ? (parseOptionalNumber(body.unitPriceWithVat) as number | null)
+      : existing.unitPriceWithVat,
+    vatRate,
+    source: body.priceSource === 'unitWithVat' ? 'withVat' : body.priceSource === 'unitWithoutVat' ? 'withoutVat' : undefined,
+  })
+  const purchasePrices = resolveVatPair({
+    withoutVat: has('purchasePriceWithoutVat')
+      ? (parseOptionalNumber(body.purchasePriceWithoutVat) as number | null)
+      : existing.purchasePriceWithoutVat,
+    withVat: has('purchasePriceWithVat')
+      ? (parseOptionalNumber(body.purchasePriceWithVat) as number | null)
+      : existing.purchasePriceWithVat,
+    vatRate,
+    source: body.priceSource === 'purchaseWithVat' ? 'withVat' : body.priceSource === 'purchaseWithoutVat' ? 'withoutVat' : undefined,
+  })
+
   // Validate using merged values so partial updates are checked correctly.
   const merged = {
     name: body.name ?? existing.name,
     inventoryKind: body.inventoryKind ?? existing.inventoryKind,
     stockQuantity: body.stockQuantity ?? existing.stockQuantity,
     minimumStock: body.minimumStock ?? existing.minimumStock,
-    unitPriceWithVat: body.unitPriceWithVat ?? existing.unitPriceWithVat,
-    purchasePriceWithVat: body.purchasePriceWithVat ?? existing.purchasePriceWithVat,
-    costPerCoffee: body.costPerCoffee ?? existing.costPerCoffee,
+    unitPriceWithoutVat: unitPrices.withoutVat,
+    unitPriceWithVat: unitPrices.withVat,
+    purchasePriceWithoutVat: purchasePrices.withoutVat,
+    purchasePriceWithVat: purchasePrices.withVat,
+    vatRate,
   }
   const check = validateInventoryItem(merged)
   if (!check.ok) {
     return NextResponse.json({ error: check.message }, { status: 400 })
   }
-
-  const has = (k: string) => Object.prototype.hasOwnProperty.call(body, k)
 
   try {
     const item = await updateItem(id, {
@@ -66,12 +94,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       inventoryKind: has('inventoryKind') ? (body.inventoryKind as InventoryKind) : existing.inventoryKind,
       category: has('category') ? (typeof body.category === 'string' ? body.category : null) : existing.category,
       unit: has('unit') ? (typeof body.unit === 'string' ? body.unit : null) : existing.unit,
-      unitPriceWithVat: has('unitPriceWithVat')
-        ? ((parseOptionalNumber(body.unitPriceWithVat) as number | null) ?? null)
-        : existing.unitPriceWithVat,
-      purchasePriceWithVat: has('purchasePriceWithVat')
-        ? ((parseOptionalNumber(body.purchasePriceWithVat) as number | null) ?? null)
-        : existing.purchasePriceWithVat,
+      unitPriceWithoutVat: unitPrices.withoutVat,
+      unitPriceWithVat: unitPrices.withVat,
+      purchasePriceWithoutVat: purchasePrices.withoutVat,
+      purchasePriceWithVat: purchasePrices.withVat,
+      vatRate,
       // Stock quantity is managed via movements; only direct edits when explicitly sent.
       stockQuantity: has('stockQuantity')
         ? ((parseOptionalNumber(body.stockQuantity) as number | null) ?? existing.stockQuantity)
@@ -81,9 +108,6 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
         : existing.minimumStock,
       status: has('status') ? (typeof body.status === 'string' ? body.status : null) : existing.status,
       notes: has('notes') ? (typeof body.notes === 'string' ? body.notes : null) : existing.notes,
-      costPerCoffee: has('costPerCoffee')
-        ? ((parseOptionalNumber(body.costPerCoffee) as number | null) ?? null)
-        : existing.costPerCoffee,
       shopUrl: has('shopUrl') ? (typeof body.shopUrl === 'string' ? body.shopUrl : null) : existing.shopUrl,
       powerWatts: has('powerWatts') ? (typeof body.powerWatts === 'string' ? body.powerWatts : null) : existing.powerWatts,
     })

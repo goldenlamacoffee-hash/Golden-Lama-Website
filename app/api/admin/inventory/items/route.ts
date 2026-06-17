@@ -9,6 +9,7 @@ import {
   type InventoryKind,
 } from '@/lib/inventory'
 import { validateInventoryItem, parseOptionalNumber } from '@/lib/validation'
+import { resolveVatPair, normalizeVatRate } from '@/lib/vat'
 
 export async function GET(request: Request) {
   const auth = await requireUser()
@@ -46,6 +47,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: check.message }, { status: 400 })
   }
 
+  const vatRate = normalizeVatRate(parseOptionalNumber(body.vatRate) as number | null)
+  const unitPrices = resolveVatPair({
+    withoutVat: parseOptionalNumber(body.unitPriceWithoutVat) as number | null,
+    withVat: parseOptionalNumber(body.unitPriceWithVat) as number | null,
+    vatRate,
+    source: body.priceSource === 'unitWithVat' ? 'withVat' : body.priceSource === 'unitWithoutVat' ? 'withoutVat' : undefined,
+  })
+  const purchasePrices = resolveVatPair({
+    withoutVat: parseOptionalNumber(body.purchasePriceWithoutVat) as number | null,
+    withVat: parseOptionalNumber(body.purchasePriceWithVat) as number | null,
+    vatRate,
+    source: body.priceSource === 'purchaseWithVat' ? 'withVat' : body.priceSource === 'purchaseWithoutVat' ? 'withoutVat' : undefined,
+  })
+
   try {
     const item = await createItem(
       {
@@ -54,13 +69,15 @@ export async function POST(request: Request) {
         inventoryKind: body.inventoryKind as InventoryKind,
         category: typeof body.category === 'string' ? body.category : null,
         unit: typeof body.unit === 'string' ? body.unit : null,
-        unitPriceWithVat: (parseOptionalNumber(body.unitPriceWithVat) as number | null) ?? null,
-        purchasePriceWithVat: (parseOptionalNumber(body.purchasePriceWithVat) as number | null) ?? null,
+        unitPriceWithoutVat: unitPrices.withoutVat,
+        unitPriceWithVat: unitPrices.withVat,
+        purchasePriceWithoutVat: purchasePrices.withoutVat,
+        purchasePriceWithVat: purchasePrices.withVat,
+        vatRate,
         stockQuantity: (parseOptionalNumber(body.stockQuantity) as number | null) ?? 0,
         minimumStock: (parseOptionalNumber(body.minimumStock) as number | null) ?? null,
         status: typeof body.status === 'string' ? body.status : null,
         notes: typeof body.notes === 'string' ? body.notes : null,
-        costPerCoffee: (parseOptionalNumber(body.costPerCoffee) as number | null) ?? null,
         shopUrl: typeof body.shopUrl === 'string' ? body.shopUrl : null,
         powerWatts: typeof body.powerWatts === 'string' ? body.powerWatts : null,
       },

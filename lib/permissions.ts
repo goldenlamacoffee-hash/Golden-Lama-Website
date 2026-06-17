@@ -16,13 +16,38 @@ export type Capability =
   | 'users:read'
   | 'users:write'
   | 'users:manage_admins'
+  // Work calendar
+  | 'calendar:read_all' // view every staff member's shifts
+  | 'calendar:read_own' // view only own shifts
+  | 'calendar:write' // create / edit / cancel shifts
+  | 'calendar:delete' // permanently delete shifts
 
 const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
-  owner: ['cms:read', 'cms:write', 'users:read', 'users:write', 'users:manage_admins'],
-  admin: ['cms:read', 'cms:write', 'users:read', 'users:write', 'users:manage_admins'],
-  manager: ['cms:read', 'cms:write', 'users:read'],
+  owner: [
+    'cms:read',
+    'cms:write',
+    'users:read',
+    'users:write',
+    'users:manage_admins',
+    'calendar:read_all',
+    'calendar:read_own',
+    'calendar:write',
+    'calendar:delete',
+  ],
+  admin: [
+    'cms:read',
+    'cms:write',
+    'users:read',
+    'users:write',
+    'users:manage_admins',
+    'calendar:read_all',
+    'calendar:read_own',
+    'calendar:write',
+    'calendar:delete',
+  ],
+  manager: ['cms:read', 'cms:write', 'users:read', 'calendar:read_all', 'calendar:read_own', 'calendar:write'],
   content_editor: ['cms:read', 'cms:write'],
-  staff: ['cms:read'],
+  staff: ['cms:read', 'calendar:read_own'],
 }
 
 export function can(role: AdminRole | undefined | null, capability: Capability): boolean {

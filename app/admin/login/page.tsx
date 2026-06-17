@@ -4,9 +4,11 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function AdminLoginPage() {
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -21,16 +23,18 @@ export default function AdminLoginPage() {
       const res = await fetch('/api/admin/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
+        body: JSON.stringify({ email, password }),
       })
 
       if (res.ok) {
         router.push('/admin')
+        router.refresh()
       } else {
-        setError('Nespravne heslo')
+        const data = await res.json().catch(() => ({}))
+        setError(data.error || 'Nesprávny e-mail alebo heslo')
       }
     } catch {
-      setError('Chyba pri prihlaseni')
+      setError('Chyba pri prihlásení')
     } finally {
       setLoading(false)
     }
@@ -44,20 +48,43 @@ export default function AdminLoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              type="password"
-              placeholder="Heslo"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-white border-[#8C6F4E]"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-[#28170F]">
+                E-mail
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="vas@email.sk"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="bg-white border-[#8C6F4E] text-[#28170F]"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-[#28170F]">
+                Heslo
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="Heslo"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="bg-white border-[#8C6F4E] text-[#28170F]"
+                required
+              />
+            </div>
             {error && <p className="text-red-600 text-sm">{error}</p>}
-            <Button 
-              type="submit" 
+            <Button
+              type="submit"
               className="w-full bg-[#E09E14] hover:bg-[#c88a10] text-[#28170F]"
               disabled={loading}
             >
-              {loading ? 'Prihlasovanie...' : 'Prihlasit sa'}
+              {loading ? 'Prihlasovanie...' : 'Prihlásiť sa'}
             </Button>
           </form>
         </CardContent>

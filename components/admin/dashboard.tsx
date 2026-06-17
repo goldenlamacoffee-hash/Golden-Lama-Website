@@ -13,7 +13,7 @@ import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
 import type { AdminRole } from "@/lib/permissions"
 import { ROLE_LABELS } from "@/lib/permissions"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, ExternalLink, Smartphone } from "lucide-react"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, ExternalLink, Smartphone, Package } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
@@ -22,6 +22,7 @@ interface AdminDashboardProps {
   canManageUsers: boolean
   canViewCalendar: boolean
   canViewOwnShifts: boolean
+  canViewInventory: boolean
   canViewAppAdmin: boolean
   appAdminUrl: string
 }
@@ -33,6 +34,7 @@ export function AdminDashboard({
   canManageUsers,
   canViewCalendar,
   canViewOwnShifts,
+  canViewInventory,
   canViewAppAdmin,
   appAdminUrl,
 }: AdminDashboardProps) {
@@ -82,6 +84,15 @@ export function AdminDashboard({
                 Moje zmeny
               </a>
             ) : null}
+            {canViewInventory && (
+              <a
+                href="/admin/inventory"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <Package className="h-4 w-4" />
+                Sklad
+              </a>
+            )}
             {canManageUsers && (
               <a
                 href="/admin/users"
@@ -132,6 +143,25 @@ export function AdminDashboard({
               <a href={appAdminUrl} target="_blank" rel="noopener noreferrer">
                 Otvoriť App Admin
                 <ExternalLink className="h-4 w-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
+        {canViewInventory && (
+          <div className="mb-6 flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                <Package className="h-5 w-5 text-[#E09E14]" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Sklad</h2>
+                <p className="text-sm text-[#8C6F4E]">Zásoby, prevádzkové položky a majetok</p>
+              </div>
+            </div>
+            <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 shrink-0">
+              <a href="/admin/inventory">
+                Otvoriť sklad
+                <Package className="h-4 w-4 ml-2" />
               </a>
             </Button>
           </div>

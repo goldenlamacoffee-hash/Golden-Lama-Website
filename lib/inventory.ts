@@ -8,6 +8,8 @@ export type MovementType = 'purchase' | 'usage' | 'adjustment' | 'waste' | 'tran
 
 export const MOVEMENT_TYPES: MovementType[] = ['purchase', 'usage', 'adjustment', 'waste', 'transfer']
 
+export const DEFAULT_VAT_RATE = 23
+
 export interface InventoryItem {
   id: string
   itemCode: string | null
@@ -15,20 +17,26 @@ export interface InventoryItem {
   inventoryKind: InventoryKind
   category: string | null
   unit: string | null
+  unitPriceWithoutVat: number | null
   unitPriceWithVat: number | null
+  purchasePriceWithoutVat: number | null
   purchasePriceWithVat: number | null
+  vatRate: number | null
   stockQuantity: number
   minimumStock: number | null
   status: string | null
   notes: string | null
-  costPerCoffee: number | null
   shopUrl: string | null
   powerWatts: string | null
   isActive: boolean
   createdBy: string | null
   createdAt: string
   updatedAt: string
-  /** Computed: stockQuantity * (purchasePriceWithVat ?? unitPriceWithVat). */
+  /** Computed valuation (with VAT). Operating uses unit price, assets use purchase price. */
+  stockValueWithVat: number
+  /** Computed valuation (without VAT). */
+  stockValueWithoutVat: number
+  /** Back-compat alias of stockValueWithVat. */
   stockValue: number
   /** Computed: stockQuantity below minimumStock (when minimumStock set). */
   lowStock: boolean
@@ -41,13 +49,15 @@ interface ItemRow {
   inventory_kind: InventoryKind
   category: string | null
   unit: string | null
+  unit_price_without_vat: string | null
   unit_price_with_vat: string | null
+  purchase_price_without_vat: string | null
   purchase_price_with_vat: string | null
+  vat_rate: string | null
   stock_quantity: string
   minimum_stock: string | null
   status: string | null
   notes: string | null
-  cost_per_coffee: string | null
   shop_url: string | null
   power_watts: string | null
   is_active: boolean
@@ -62,12 +72,33 @@ function num(v: string | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+const round2 = (n: number) => Math.round(n * 100) / 100
+
 function mapItem(row: ItemRow): InventoryItem {
   const stockQuantity = num(row.stock_quantity) ?? 0
-  const purchasePrice = num(row.purchase_price_with_vat)
-  const unitPrice = num(row.unit_price_with_vat)
+  const unitPriceWithoutVat = num(row.unit_price_without_vat)
+  const unitPriceWithVat = num(row.unit_price_with_vat)
+  const purchasePriceWithoutVat = num(row.purchase_price_without_vat)
+  const purchasePriceWithVat = num(row.purchase_price_with_vat)
+  const vatRate = num(row.vat_rate)
   const minimumStock = num(row.minimum_stock)
-  const valuationPrice = purchasePrice ?? unitPrice ?? 0
+
+  // Operating items are valued at unit price, assets at purchase price; fall back
+  // to the other price so legacy rows still produce a value.
+  const valWithVat =
+    (row.inventory_kind === 'asset' ? purchasePriceWithVat : unitPriceWithVat) ??
+    purchasePriceWithVat ??
+    unitPriceWithVat ??
+    0
+  const valWithoutVat =
+    (row.inventory_kind === 'asset' ? purchasePriceWithoutVat : unitPriceWithoutVat) ??
+    purchasePriceWithoutVat ??
+    unitPriceWithoutVat ??
+    0
+
+  const stockValueWithVat = round2(stockQuantity * valWithVat)
+  const stockValueWithoutVat = round2(stockQuantity * valWithoutVat)
+
   return {
     id: row.id,
     itemCode: row.item_code,
@@ -75,29 +106,34 @@ function mapItem(row: ItemRow): InventoryItem {
     inventoryKind: row.inventory_kind,
     category: row.category,
     unit: row.unit,
-    unitPriceWithVat: unitPrice,
-    purchasePriceWithVat: purchasePrice,
+    unitPriceWithoutVat,
+    unitPriceWithVat,
+    purchasePriceWithoutVat,
+    purchasePriceWithVat,
+    vatRate,
     stockQuantity,
     minimumStock,
     status: row.status,
     notes: row.notes,
-    costPerCoffee: num(row.cost_per_coffee),
     shopUrl: row.shop_url,
     powerWatts: row.power_watts,
     isActive: row.is_active,
     createdBy: row.created_by,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
-    stockValue: Math.round(stockQuantity * valuationPrice * 100) / 100,
+    stockValueWithVat,
+    stockValueWithoutVat,
+    stockValue: stockValueWithVat,
     lowStock: minimumStock !== null && stockQuantity < minimumStock,
   }
 }
 
 const SELECT_ITEM = `
   SELECT id, item_code, name, inventory_kind, category, unit,
-         unit_price_with_vat, purchase_price_with_vat, stock_quantity, minimum_stock,
-         status, notes, cost_per_coffee, shop_url, power_watts, is_active,
-         created_by, created_at, updated_at
+         unit_price_without_vat, unit_price_with_vat,
+         purchase_price_without_vat, purchase_price_with_vat, vat_rate,
+         stock_quantity, minimum_stock, status, notes, shop_url, power_watts,
+         is_active, created_by, created_at, updated_at
   FROM inventory_items
 `
 
@@ -150,13 +186,15 @@ export interface ItemInput {
   inventoryKind: InventoryKind
   category: string | null
   unit: string | null
+  unitPriceWithoutVat: number | null
   unitPriceWithVat: number | null
+  purchasePriceWithoutVat: number | null
   purchasePriceWithVat: number | null
+  vatRate: number | null
   stockQuantity: number
   minimumStock: number | null
   status: string | null
   notes: string | null
-  costPerCoffee: number | null
   shopUrl: string | null
   powerWatts: string | null
 }
@@ -181,10 +219,11 @@ export async function createItem(input: ItemInput, createdBy: string): Promise<I
     input.itemCode && input.itemCode.trim() ? input.itemCode.trim() : await nextItemCode(input.inventoryKind)
   const result = await pool.query<{ id: string }>(
     `INSERT INTO inventory_items
-       (item_code, name, inventory_kind, category, unit, unit_price_with_vat,
-        purchase_price_with_vat, stock_quantity, minimum_stock, status, notes,
-        cost_per_coffee, shop_url, power_watts, created_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       (item_code, name, inventory_kind, category, unit,
+        unit_price_without_vat, unit_price_with_vat,
+        purchase_price_without_vat, purchase_price_with_vat, vat_rate,
+        stock_quantity, minimum_stock, status, notes, shop_url, power_watts, created_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
      RETURNING id`,
     [
       itemCode,
@@ -192,13 +231,15 @@ export async function createItem(input: ItemInput, createdBy: string): Promise<I
       input.inventoryKind,
       input.category?.trim() || null,
       input.unit?.trim() || null,
+      input.unitPriceWithoutVat,
       input.unitPriceWithVat,
+      input.purchasePriceWithoutVat,
       input.purchasePriceWithVat,
+      input.vatRate,
       input.stockQuantity,
       input.minimumStock,
       input.status?.trim() || null,
       input.notes?.trim() || null,
-      input.costPerCoffee,
       input.shopUrl?.trim() || null,
       input.powerWatts?.trim() || null,
       createdBy,
@@ -215,15 +256,17 @@ export async function updateItem(id: string, patch: Partial<ItemInput>): Promise
        inventory_kind = COALESCE($4, inventory_kind),
        category = $5,
        unit = $6,
-       unit_price_with_vat = $7,
-       purchase_price_with_vat = $8,
-       stock_quantity = COALESCE($9, stock_quantity),
-       minimum_stock = $10,
-       status = $11,
-       notes = $12,
-       cost_per_coffee = $13,
-       shop_url = $14,
-       power_watts = $15,
+       unit_price_without_vat = $7,
+       unit_price_with_vat = $8,
+       purchase_price_without_vat = $9,
+       purchase_price_with_vat = $10,
+       vat_rate = $11,
+       stock_quantity = COALESCE($12, stock_quantity),
+       minimum_stock = $13,
+       status = $14,
+       notes = $15,
+       shop_url = $16,
+       power_watts = $17,
        updated_at = now()
      WHERE id = $1
      RETURNING id`,
@@ -234,13 +277,15 @@ export async function updateItem(id: string, patch: Partial<ItemInput>): Promise
       patch.inventoryKind ?? null,
       patch.category?.trim() || null,
       patch.unit?.trim() || null,
+      patch.unitPriceWithoutVat ?? null,
       patch.unitPriceWithVat ?? null,
+      patch.purchasePriceWithoutVat ?? null,
       patch.purchasePriceWithVat ?? null,
+      patch.vatRate ?? null,
       patch.stockQuantity ?? null,
       patch.minimumStock ?? null,
       patch.status?.trim() || null,
       patch.notes?.trim() || null,
-      patch.costPerCoffee ?? null,
       patch.shopUrl?.trim() || null,
       patch.powerWatts?.trim() || null,
     ],
@@ -266,7 +311,9 @@ export interface InventoryMovement {
   itemCode: string | null
   movementType: MovementType
   quantityChange: number
+  unitPriceWithoutVat: number | null
   unitPriceWithVat: number | null
+  vatRate: number | null
   note: string | null
   createdBy: string | null
   createdByName: string | null
@@ -280,7 +327,9 @@ interface MovementRow {
   item_code: string | null
   movement_type: MovementType
   quantity_change: string
+  unit_price_without_vat: string | null
   unit_price_with_vat: string | null
+  vat_rate: string | null
   note: string | null
   created_by: string | null
   created_by_name: string | null
@@ -295,7 +344,9 @@ function mapMovement(row: MovementRow): InventoryMovement {
     itemCode: row.item_code,
     movementType: row.movement_type,
     quantityChange: num(row.quantity_change) ?? 0,
+    unitPriceWithoutVat: num(row.unit_price_without_vat),
     unitPriceWithVat: num(row.unit_price_with_vat),
+    vatRate: num(row.vat_rate),
     note: row.note,
     createdBy: row.created_by,
     createdByName: row.created_by_name,
@@ -305,7 +356,8 @@ function mapMovement(row: MovementRow): InventoryMovement {
 
 const SELECT_MOVEMENT = `
   SELECT m.id, m.item_id, i.name AS item_name, i.item_code AS item_code,
-         m.movement_type, m.quantity_change, m.unit_price_with_vat, m.note,
+         m.movement_type, m.quantity_change,
+         m.unit_price_without_vat, m.unit_price_with_vat, m.vat_rate, m.note,
          m.created_by, u.name AS created_by_name, m.created_at
   FROM inventory_movements m
   JOIN inventory_items i ON i.id = m.item_id
@@ -332,7 +384,9 @@ export interface MovementInput {
   itemId: string
   movementType: MovementType
   quantityChange: number
+  unitPriceWithoutVat: number | null
   unitPriceWithVat: number | null
+  vatRate: number | null
   note: string | null
 }
 
@@ -362,13 +416,15 @@ export async function recordMovement(
     }
     const inserted = await client.query<{ id: string }>(
       `INSERT INTO inventory_movements
-         (item_id, movement_type, quantity_change, unit_price_with_vat, note, created_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+         (item_id, movement_type, quantity_change, unit_price_without_vat, unit_price_with_vat, vat_rate, note, created_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
       [
         input.itemId,
         input.movementType,
         input.quantityChange,
+        input.unitPriceWithoutVat,
         input.unitPriceWithVat,
+        input.vatRate,
         input.note?.trim() || null,
         createdBy,
       ],
@@ -395,9 +451,12 @@ export async function recordMovement(
 export interface InventorySummary {
   operatingCount: number
   assetCount: number
-  operatingStockValue: number
-  assetStockValue: number
-  totalStockValue: number
+  operatingStockValueWithVat: number
+  operatingStockValueWithoutVat: number
+  assetStockValueWithVat: number
+  assetStockValueWithoutVat: number
+  totalStockValueWithVat: number
+  totalStockValueWithoutVat: number
   lowStockCount: number
 }
 
@@ -405,26 +464,32 @@ export async function getSummary(): Promise<InventorySummary> {
   const items = await listItems({ includeInactive: false })
   let operatingCount = 0
   let assetCount = 0
-  let operatingStockValue = 0
-  let assetStockValue = 0
+  let operatingStockValueWithVat = 0
+  let operatingStockValueWithoutVat = 0
+  let assetStockValueWithVat = 0
+  let assetStockValueWithoutVat = 0
   let lowStockCount = 0
   for (const it of items) {
     if (it.inventoryKind === 'operating') {
       operatingCount += 1
-      operatingStockValue += it.stockValue
+      operatingStockValueWithVat += it.stockValueWithVat
+      operatingStockValueWithoutVat += it.stockValueWithoutVat
     } else {
       assetCount += 1
-      assetStockValue += it.stockValue
+      assetStockValueWithVat += it.stockValueWithVat
+      assetStockValueWithoutVat += it.stockValueWithoutVat
     }
     if (it.lowStock) lowStockCount += 1
   }
-  const round = (n: number) => Math.round(n * 100) / 100
   return {
     operatingCount,
     assetCount,
-    operatingStockValue: round(operatingStockValue),
-    assetStockValue: round(assetStockValue),
-    totalStockValue: round(operatingStockValue + assetStockValue),
+    operatingStockValueWithVat: round2(operatingStockValueWithVat),
+    operatingStockValueWithoutVat: round2(operatingStockValueWithoutVat),
+    assetStockValueWithVat: round2(assetStockValueWithVat),
+    assetStockValueWithoutVat: round2(assetStockValueWithoutVat),
+    totalStockValueWithVat: round2(operatingStockValueWithVat + assetStockValueWithVat),
+    totalStockValueWithoutVat: round2(operatingStockValueWithoutVat + assetStockValueWithoutVat),
     lowStockCount,
   }
 }

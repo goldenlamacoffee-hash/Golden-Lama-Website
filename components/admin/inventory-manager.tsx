@@ -49,6 +49,7 @@ import {
   Search,
   ExternalLink,
 } from "lucide-react"
+import { priceWithVat, priceWithoutVat, normalizeVatRate, DEFAULT_VAT_RATE } from "@/lib/vat"
 
 export type InventoryKind = "operating" | "asset"
 export type MovementType = "purchase" | "usage" | "adjustment" | "waste" | "transfer"
@@ -60,16 +61,20 @@ export interface ItemDto {
   inventoryKind: InventoryKind
   category: string | null
   unit: string | null
+  unitPriceWithoutVat: number | null
   unitPriceWithVat: number | null
+  purchasePriceWithoutVat: number | null
   purchasePriceWithVat: number | null
+  vatRate: number | null
   stockQuantity: number
   minimumStock: number | null
   status: string | null
   notes: string | null
-  costPerCoffee: number | null
   shopUrl: string | null
   powerWatts: string | null
   isActive: boolean
+  stockValueWithVat: number
+  stockValueWithoutVat: number
   stockValue: number
   lowStock: boolean
 }
@@ -81,7 +86,9 @@ export interface MovementDto {
   itemCode: string | null
   movementType: MovementType
   quantityChange: number
+  unitPriceWithoutVat: number | null
   unitPriceWithVat: number | null
+  vatRate: number | null
   note: string | null
   createdByName: string | null
   createdAt: string
@@ -90,9 +97,12 @@ export interface MovementDto {
 interface Summary {
   operatingCount: number
   assetCount: number
-  operatingStockValue: number
-  assetStockValue: number
-  totalStockValue: number
+  operatingStockValueWithVat: number
+  operatingStockValueWithoutVat: number
+  assetStockValueWithVat: number
+  assetStockValueWithoutVat: number
+  totalStockValueWithVat: number
+  totalStockValueWithoutVat: number
   lowStockCount: number
 }
 
@@ -134,13 +144,17 @@ interface ItemFormState {
   inventoryKind: InventoryKind
   category: string
   unit: string
-  unitPriceWithVat: string
-  purchasePriceWithVat: string
+  // Single VAT price block; meaning depends on kind (operating = unit/sale price,
+  // asset = purchase price). Mapped to the correct DB columns on save.
+  priceWithoutVat: string
+  priceWithVat: string
+  vatRate: string
+  // Tracks which price the user last edited, so VAT-rate changes recalc the right side.
+  priceSource: "withoutVat" | "withVat"
   stockQuantity: string
   minimumStock: string
   status: string
   notes: string
-  costPerCoffee: string
   shopUrl: string
   powerWatts: string
 }
@@ -152,35 +166,64 @@ function emptyItemForm(kind: InventoryKind): ItemFormState {
     inventoryKind: kind,
     category: "",
     unit: "",
-    unitPriceWithVat: "",
-    purchasePriceWithVat: "",
+    priceWithoutVat: "",
+    priceWithVat: "",
+    vatRate: String(DEFAULT_VAT_RATE),
+    priceSource: "withoutVat",
     stockQuantity: "0",
     minimumStock: "",
     status: "",
     notes: "",
-    costPerCoffee: "",
     shopUrl: "",
     powerWatts: "",
   }
 }
 
 function itemToForm(item: ItemDto): ItemFormState {
+  const withoutVat = item.inventoryKind === "asset" ? item.purchasePriceWithoutVat : item.unitPriceWithoutVat
+  const withVat = item.inventoryKind === "asset" ? item.purchasePriceWithVat : item.unitPriceWithVat
   return {
     itemCode: item.itemCode ?? "",
     name: item.name,
     inventoryKind: item.inventoryKind,
     category: item.category ?? "",
     unit: item.unit ?? "",
-    unitPriceWithVat: item.unitPriceWithVat?.toString() ?? "",
-    purchasePriceWithVat: item.purchasePriceWithVat?.toString() ?? "",
+    priceWithoutVat: withoutVat?.toString() ?? "",
+    priceWithVat: withVat?.toString() ?? "",
+    vatRate: (item.vatRate ?? DEFAULT_VAT_RATE).toString(),
+    priceSource: "withoutVat",
     stockQuantity: item.stockQuantity.toString(),
     minimumStock: item.minimumStock?.toString() ?? "",
     status: item.status ?? "",
     notes: item.notes ?? "",
-    costPerCoffee: item.costPerCoffee?.toString() ?? "",
     shopUrl: item.shopUrl ?? "",
     powerWatts: item.powerWatts ?? "",
   }
+}
+
+/** Recomputes the VAT price block when one input changes, keeping the edited field as truth. */
+function recalcItemPrices(
+  form: ItemFormState,
+  field: "priceWithoutVat" | "priceWithVat" | "vatRate",
+  value: string,
+): ItemFormState {
+  const next = { ...form, [field]: value }
+  const rate = normalizeVatRate(value === "" && field === "vatRate" ? DEFAULT_VAT_RATE : Number(next.vatRate))
+  if (field === "priceWithoutVat") {
+    next.priceSource = "withoutVat"
+    next.priceWithVat = value.trim() === "" ? "" : String(priceWithVat(Number(value), rate))
+  } else if (field === "priceWithVat") {
+    next.priceSource = "withVat"
+    next.priceWithoutVat = value.trim() === "" ? "" : String(priceWithoutVat(Number(value), rate))
+  } else {
+    // vatRate changed: recompute the non-source side from the source side.
+    if (next.priceSource === "withVat" && next.priceWithVat.trim() !== "") {
+      next.priceWithoutVat = String(priceWithoutVat(Number(next.priceWithVat), rate))
+    } else if (next.priceWithoutVat.trim() !== "") {
+      next.priceWithVat = String(priceWithVat(Number(next.priceWithoutVat), rate))
+    }
+  }
+  return next
 }
 
 export function InventoryManager({ currentUser, canWrite, canDelete }: InventoryManagerProps) {
@@ -205,7 +248,10 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
   const [movementItem, setMovementItem] = useState<ItemDto | null>(null)
   const [movementType, setMovementType] = useState<MovementType>("purchase")
   const [movementQty, setMovementQty] = useState("")
-  const [movementPrice, setMovementPrice] = useState("")
+  const [movementPriceWithoutVat, setMovementPriceWithoutVat] = useState("")
+  const [movementPriceWithVat, setMovementPriceWithVat] = useState("")
+  const [movementVatRate, setMovementVatRate] = useState(String(DEFAULT_VAT_RATE))
+  const [movementPriceSource, setMovementPriceSource] = useState<"withoutVat" | "withVat">("withoutVat")
   const [movementNote, setMovementNote] = useState("")
 
   // Delete
@@ -263,28 +309,70 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
     setMovementItem(item)
     setMovementType("purchase")
     setMovementQty("")
-    setMovementPrice(item.purchasePriceWithVat?.toString() ?? "")
+    const rate = item.vatRate ?? DEFAULT_VAT_RATE
+    const presetWithVat = item.inventoryKind === "asset" ? item.purchasePriceWithVat : item.unitPriceWithVat
+    const presetWithoutVat = item.inventoryKind === "asset" ? item.purchasePriceWithoutVat : item.unitPriceWithoutVat
+    setMovementVatRate(String(rate))
+    setMovementPriceWithVat(presetWithVat?.toString() ?? "")
+    setMovementPriceWithoutVat(presetWithoutVat?.toString() ?? "")
+    setMovementPriceSource("withoutVat")
     setMovementNote("")
     setError("")
     setMovementDialogOpen(true)
   }
 
+  function handleMovementPriceChange(field: "withoutVat" | "withVat" | "vatRate", value: string) {
+    if (field === "vatRate") {
+      setMovementVatRate(value)
+      const rate = normalizeVatRate(value === "" ? DEFAULT_VAT_RATE : Number(value))
+      if (movementPriceSource === "withVat" && movementPriceWithVat.trim() !== "") {
+        setMovementPriceWithoutVat(String(priceWithoutVat(Number(movementPriceWithVat), rate)))
+      } else if (movementPriceWithoutVat.trim() !== "") {
+        setMovementPriceWithVat(String(priceWithVat(Number(movementPriceWithoutVat), rate)))
+      }
+      return
+    }
+    const rate = normalizeVatRate(Number(movementVatRate) || DEFAULT_VAT_RATE)
+    if (field === "withoutVat") {
+      setMovementPriceWithoutVat(value)
+      setMovementPriceSource("withoutVat")
+      setMovementPriceWithVat(value.trim() === "" ? "" : String(priceWithVat(Number(value), rate)))
+    } else {
+      setMovementPriceWithVat(value)
+      setMovementPriceSource("withVat")
+      setMovementPriceWithoutVat(value.trim() === "" ? "" : String(priceWithoutVat(Number(value), rate)))
+    }
+  }
+
   async function handleSaveItem() {
     setBusy(true)
     setError("")
+    const isAsset = itemForm.inventoryKind === "asset"
+    const priceWithoutVat = itemForm.priceWithoutVat.trim() || null
+    const priceWithVat = itemForm.priceWithVat.trim() || null
     const payload = {
       itemCode: itemForm.itemCode.trim() || null,
       name: itemForm.name,
       inventoryKind: itemForm.inventoryKind,
       category: itemForm.category.trim() || null,
       unit: itemForm.unit.trim() || null,
-      unitPriceWithVat: itemForm.unitPriceWithVat.trim() || null,
-      purchasePriceWithVat: itemForm.purchasePriceWithVat.trim() || null,
+      vatRate: itemForm.vatRate.trim() || null,
+      // Map the single VAT price block to the columns matching the item kind.
+      unitPriceWithoutVat: isAsset ? null : priceWithoutVat,
+      unitPriceWithVat: isAsset ? null : priceWithVat,
+      purchasePriceWithoutVat: isAsset ? priceWithoutVat : null,
+      purchasePriceWithVat: isAsset ? priceWithVat : null,
+      priceSource: isAsset
+        ? itemForm.priceSource === "withVat"
+          ? "purchaseWithVat"
+          : "purchaseWithoutVat"
+        : itemForm.priceSource === "withVat"
+          ? "unitWithVat"
+          : "unitWithoutVat",
       stockQuantity: itemForm.stockQuantity.trim() || "0",
       minimumStock: itemForm.minimumStock.trim() || null,
       status: itemForm.status.trim() || null,
       notes: itemForm.notes.trim() || null,
-      costPerCoffee: itemForm.costPerCoffee.trim() || null,
       shopUrl: itemForm.shopUrl.trim() || null,
       powerWatts: itemForm.powerWatts.trim() || null,
     }
@@ -324,7 +412,10 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
       itemId: movementItem.id,
       movementType,
       quantityChange: signed,
-      unitPriceWithVat: movementPrice.trim() || null,
+      unitPriceWithoutVat: movementPriceWithoutVat.trim() || null,
+      unitPriceWithVat: movementPriceWithVat.trim() || null,
+      vatRate: movementVatRate.trim() || null,
+      priceSource: movementPriceSource,
       note: movementNote.trim() || null,
     }
     try {
@@ -408,17 +499,14 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
                   <th className="px-3 py-2 text-left font-medium">Kód</th>
                   <th className="px-3 py-2 text-left font-medium">Názov</th>
                   <th className="px-3 py-2 text-left font-medium">Typ</th>
-                  <th className="px-3 py-2 text-right font-medium">
-                    {kind === "asset" ? "Cena s DPH" : "Cena / jedn."}
-                  </th>
+                  <th className="px-3 py-2 text-right font-medium">Cena bez DPH</th>
+                  <th className="px-3 py-2 text-right font-medium">DPH %</th>
+                  <th className="px-3 py-2 text-right font-medium">Cena s DPH</th>
                   <th className="px-3 py-2 text-right font-medium">{kind === "asset" ? "Množstvo" : "Skladem"}</th>
-                  <th className="px-3 py-2 text-right font-medium">Hodnota</th>
-                  {kind === "asset" ? (
-                    <th className="px-3 py-2 text-right font-medium">Príkon</th>
-                  ) : (
-                    <th className="px-3 py-2 text-right font-medium">Náklad/káva</th>
-                  )}
+                  <th className="px-3 py-2 text-right font-medium">Hodnota bez DPH</th>
+                  <th className="px-3 py-2 text-right font-medium">Hodnota s DPH</th>
                   <th className="px-3 py-2 text-left font-medium">Stav</th>
+                  {kind === "asset" && <th className="px-3 py-2 text-right font-medium">Príkon</th>}
                   <th className="px-3 py-2 text-right font-medium">Akcie</th>
                 </tr>
               </thead>
@@ -447,7 +535,13 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
                     </td>
                     <td className="px-3 py-2 text-[#8C6F4E]">{item.category ?? "—"}</td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {eur(kind === "asset" ? item.purchasePriceWithVat : item.unitPriceWithVat ?? item.purchasePriceWithVat)}
+                      {eur(kind === "asset" ? item.purchasePriceWithoutVat : item.unitPriceWithoutVat)}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[#8C6F4E]">
+                      {item.vatRate !== null ? `${item.vatRate} %` : "—"}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {eur(kind === "asset" ? item.purchasePriceWithVat : item.unitPriceWithVat)}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
                       {qty(item.stockQuantity, item.unit)}
@@ -455,12 +549,8 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
                         <div className="text-xs text-[#8C6F4E]">min {qty(item.minimumStock, item.unit)}</div>
                       )}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-[#E09E14]">{eur(item.stockValue)}</td>
-                    {kind === "asset" ? (
-                      <td className="px-3 py-2 text-right tabular-nums text-[#8C6F4E]">{item.powerWatts ?? "—"}</td>
-                    ) : (
-                      <td className="px-3 py-2 text-right tabular-nums text-[#8C6F4E]">{eur(item.costPerCoffee)}</td>
-                    )}
+                    <td className="px-3 py-2 text-right tabular-nums text-[#8C6F4E]">{eur(item.stockValueWithoutVat)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums text-[#E09E14]">{eur(item.stockValueWithVat)}</td>
                     <td className="px-3 py-2">
                       {item.status ? (
                         <Badge className="bg-[#4a3526] text-[#F5E3C2] text-[10px]">{item.status}</Badge>
@@ -468,6 +558,9 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
                         <span className="text-[#8C6F4E]">—</span>
                       )}
                     </td>
+                    {kind === "asset" && (
+                      <td className="px-3 py-2 text-right tabular-nums text-[#8C6F4E]">{item.powerWatts ?? "—"}</td>
+                    )}
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
                         {canWrite && (
@@ -546,25 +639,33 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
 
       <main className="max-w-6xl mx-auto px-6 py-8">
         {/* KPI cards */}
-        <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
           <div className="rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] p-4">
             <div className="flex items-center gap-2 text-[#8C6F4E] text-xs">
-              <Euro className="h-4 w-4" /> Celková hodnota skladu
+              <Boxes className="h-4 w-4" /> Sklad bez DPH
             </div>
-            <div className="mt-1 font-heading text-2xl text-[#E09E14]">{eur(summary?.totalStockValue ?? 0)}</div>
+            <div className="mt-1 font-heading text-2xl text-[#F5E3C2]">{eur(summary?.totalStockValueWithoutVat ?? 0)}</div>
+            <div className="text-xs text-[#8C6F4E]">{summary?.operatingCount ?? 0} prevádzkových položiek</div>
           </div>
           <div className="rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] p-4">
             <div className="flex items-center gap-2 text-[#8C6F4E] text-xs">
-              <Boxes className="h-4 w-4" /> Prevádzkový sklad
+              <Euro className="h-4 w-4" /> Sklad s DPH
             </div>
-            <div className="mt-1 font-heading text-2xl text-[#F5E3C2]">{eur(summary?.operatingStockValue ?? 0)}</div>
-            <div className="text-xs text-[#8C6F4E]">{summary?.operatingCount ?? 0} položiek</div>
+            <div className="mt-1 font-heading text-2xl text-[#E09E14]">{eur(summary?.totalStockValueWithVat ?? 0)}</div>
+            <div className="text-xs text-[#8C6F4E]">vrátane majetku</div>
           </div>
           <div className="rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] p-4">
             <div className="flex items-center gap-2 text-[#8C6F4E] text-xs">
-              <Wrench className="h-4 w-4" /> Majetok
+              <Wrench className="h-4 w-4" /> Majetok bez DPH
             </div>
-            <div className="mt-1 font-heading text-2xl text-[#F5E3C2]">{eur(summary?.assetStockValue ?? 0)}</div>
+            <div className="mt-1 font-heading text-2xl text-[#F5E3C2]">{eur(summary?.assetStockValueWithoutVat ?? 0)}</div>
+            <div className="text-xs text-[#8C6F4E]">{summary?.assetCount ?? 0} položiek</div>
+          </div>
+          <div className="rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] p-4">
+            <div className="flex items-center gap-2 text-[#8C6F4E] text-xs">
+              <Wrench className="h-4 w-4" /> Majetok s DPH
+            </div>
+            <div className="mt-1 font-heading text-2xl text-[#F5E3C2]">{eur(summary?.assetStockValueWithVat ?? 0)}</div>
             <div className="text-xs text-[#8C6F4E]">{summary?.assetCount ?? 0} položiek</div>
           </div>
           <div className="rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] p-4">
@@ -741,43 +842,48 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
               />
             </div>
             <div className="space-y-2">
-              <Label>Nákupná cena s DPH</Label>
+              <Label>Cena bez DPH</Label>
               <Input
                 type="number"
                 step="0.01"
-                value={itemForm.purchasePriceWithVat}
-                onChange={(e) => setItemForm({ ...itemForm, purchasePriceWithVat: e.target.value })}
+                min="0"
+                value={itemForm.priceWithoutVat}
+                onChange={(e) => setItemForm(recalcItemPrices(itemForm, "priceWithoutVat", e.target.value))}
                 className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
               />
             </div>
             <div className="space-y-2">
-              <Label>Predajná cena s DPH</Label>
+              <Label>DPH %</Label>
               <Input
                 type="number"
                 step="0.01"
-                value={itemForm.unitPriceWithVat}
-                onChange={(e) => setItemForm({ ...itemForm, unitPriceWithVat: e.target.value })}
+                min="0"
+                value={itemForm.vatRate}
+                onChange={(e) => setItemForm(recalcItemPrices(itemForm, "vatRate", e.target.value))}
                 className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
               />
             </div>
             <div className="space-y-2">
-              <Label>Náklad na kávu</Label>
+              <Label>Cena s DPH</Label>
               <Input
                 type="number"
-                step="0.0001"
-                value={itemForm.costPerCoffee}
-                onChange={(e) => setItemForm({ ...itemForm, costPerCoffee: e.target.value })}
+                step="0.01"
+                min="0"
+                value={itemForm.priceWithVat}
+                onChange={(e) => setItemForm(recalcItemPrices(itemForm, "priceWithVat", e.target.value))}
                 className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Príkon (W)</Label>
-              <Input
-                value={itemForm.powerWatts}
-                onChange={(e) => setItemForm({ ...itemForm, powerWatts: e.target.value })}
-                className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
-              />
-            </div>
+            {itemForm.inventoryKind === "asset" && (
+              <div className="space-y-2">
+                <Label>Príkon (W)</Label>
+                <Input
+                  value={itemForm.powerWatts}
+                  onChange={(e) => setItemForm({ ...itemForm, powerWatts: e.target.value })}
+                  className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
+                />
+              </div>
+            )}
             <div className="space-y-2 sm:col-span-2">
               <Label>Odkaz na eshop</Label>
               <Input
@@ -874,15 +980,40 @@ export function InventoryManager({ currentUser, canWrite, canDelete }: Inventory
                 className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
               />
             </div>
-            <div className="space-y-2">
-              <Label>Cena s DPH (voliteľné)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                value={movementPrice}
-                onChange={(e) => setMovementPrice(e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
-              />
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs">Cena bez DPH</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={movementPriceWithoutVat}
+                  onChange={(e) => handleMovementPriceChange("withoutVat", e.target.value)}
+                  className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">DPH %</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={movementVatRate}
+                  onChange={(e) => handleMovementPriceChange("vatRate", e.target.value)}
+                  className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Cena s DPH</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={movementPriceWithVat}
+                  onChange={(e) => handleMovementPriceChange("withVat", e.target.value)}
+                  className="bg-[#28170F] border-[#8C6F4E]/40 text-[#F5E3C2]"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Poznámka</Label>

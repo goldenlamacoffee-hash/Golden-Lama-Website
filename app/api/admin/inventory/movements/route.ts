@@ -4,6 +4,7 @@ import { can } from '@/lib/permissions'
 import { logAudit } from '@/lib/auth'
 import { listMovements, recordMovement, type MovementType } from '@/lib/inventory'
 import { validateMovement, parseOptionalNumber } from '@/lib/validation'
+import { resolveVatPair, normalizeVatRate } from '@/lib/vat'
 
 export async function GET(request: Request) {
   const auth = await requireUser()
@@ -40,13 +41,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: check.message }, { status: 400 })
   }
 
+  const vatRate = normalizeVatRate(parseOptionalNumber(body.vatRate) as number | null)
+  const prices = resolveVatPair({
+    withoutVat: parseOptionalNumber(body.unitPriceWithoutVat) as number | null,
+    withVat: parseOptionalNumber(body.unitPriceWithVat) as number | null,
+    vatRate,
+    source: body.priceSource === 'withVat' ? 'withVat' : body.priceSource === 'withoutVat' ? 'withoutVat' : undefined,
+  })
+
   try {
     const { movement, item } = await recordMovement(
       {
         itemId: body.itemId,
         movementType: body.movementType as MovementType,
         quantityChange: parseOptionalNumber(body.quantityChange) as number,
-        unitPriceWithVat: (parseOptionalNumber(body.unitPriceWithVat) as number | null) ?? null,
+        unitPriceWithoutVat: prices.withoutVat,
+        unitPriceWithVat: prices.withVat,
+        vatRate: prices.withoutVat === null && prices.withVat === null ? null : vatRate,
         note: typeof body.note === 'string' ? body.note : null,
       },
       auth.user.id,

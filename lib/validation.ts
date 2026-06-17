@@ -113,9 +113,11 @@ export function validateInventoryItem(input: {
   inventoryKind?: unknown
   stockQuantity?: unknown
   minimumStock?: unknown
+  unitPriceWithoutVat?: unknown
   unitPriceWithVat?: unknown
+  purchasePriceWithoutVat?: unknown
   purchasePriceWithVat?: unknown
-  costPerCoffee?: unknown
+  vatRate?: unknown
 }): InventoryCheck {
   if (typeof input.name !== 'string' || input.name.trim().length === 0) {
     return { ok: false, message: 'Zadajte názov položky.' }
@@ -133,9 +135,10 @@ export function validateInventoryItem(input: {
   }
   for (const [val, label] of [
     [input.minimumStock, 'minimálny stav'],
-    [input.unitPriceWithVat, 'predajná cena'],
-    [input.purchasePriceWithVat, 'nákupná cena'],
-    [input.costPerCoffee, 'náklad na kávu'],
+    [input.unitPriceWithoutVat, 'predajná cena bez DPH'],
+    [input.unitPriceWithVat, 'predajná cena s DPH'],
+    [input.purchasePriceWithoutVat, 'nákupná cena bez DPH'],
+    [input.purchasePriceWithVat, 'nákupná cena s DPH'],
   ] as const) {
     const parsed = parseOptionalNumber(val)
     if (parsed === undefined) {
@@ -145,13 +148,22 @@ export function validateInventoryItem(input: {
       return { ok: false, message: `Hodnota nesmie byť záporná: ${label}.` }
     }
   }
+  const vat = parseOptionalNumber(input.vatRate)
+  if (vat === undefined) {
+    return { ok: false, message: 'Neplatná sadzba DPH.' }
+  }
+  if (vat !== null && vat < 0) {
+    return { ok: false, message: 'Sadzba DPH nesmie byť záporná.' }
+  }
   return { ok: true }
 }
 
 export function validateMovement(input: {
   movementType?: unknown
   quantityChange?: unknown
+  unitPriceWithoutVat?: unknown
   unitPriceWithVat?: unknown
+  vatRate?: unknown
 }): InventoryCheck {
   if (!MOVEMENT_TYPE_VALUES.includes(input.movementType as string)) {
     return { ok: false, message: 'Neplatný typ pohybu.' }
@@ -160,9 +172,18 @@ export function validateMovement(input: {
   if (qty === undefined || qty === null || qty === 0) {
     return { ok: false, message: 'Zadajte nenulovú zmenu množstva.' }
   }
-  const price = parseOptionalNumber(input.unitPriceWithVat)
-  if (price === undefined || (price !== null && price < 0)) {
-    return { ok: false, message: 'Neplatná cena.' }
+  for (const [val, label] of [
+    [input.unitPriceWithoutVat, 'cena bez DPH'],
+    [input.unitPriceWithVat, 'cena s DPH'],
+  ] as const) {
+    const price = parseOptionalNumber(val)
+    if (price === undefined || (price !== null && price < 0)) {
+      return { ok: false, message: `Neplatná ${label}.` }
+    }
+  }
+  const vat = parseOptionalNumber(input.vatRate)
+  if (vat === undefined || (vat !== null && vat < 0)) {
+    return { ok: false, message: 'Neplatná sadzba DPH.' }
   }
   return { ok: true }
 }

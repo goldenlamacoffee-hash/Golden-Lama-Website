@@ -20,6 +20,8 @@ export default async function AdminPage() {
       currentUser={{ name: user.name, email: user.email, role: user.role }}
       canEdit={can(user.role, 'cms:write')}
       canManageUsers={can(user.role, 'users:read')}
+      canViewCalendar={can(user.role, 'calendar:read_all')}
+      canViewOwnShifts={can(user.role, 'calendar:read_own')}
     />
   )
 }

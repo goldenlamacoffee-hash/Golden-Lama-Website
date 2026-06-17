@@ -13,16 +13,25 @@ import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
 import type { AdminRole } from "@/lib/permissions"
 import { ROLE_LABELS } from "@/lib/permissions"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock } from "lucide-react"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
   currentUser: { name: string; email: string; role: AdminRole }
   canEdit: boolean
   canManageUsers: boolean
+  canViewCalendar: boolean
+  canViewOwnShifts: boolean
 }
 
-export function AdminDashboard({ initialData, currentUser, canEdit, canManageUsers }: AdminDashboardProps) {
+export function AdminDashboard({
+  initialData,
+  currentUser,
+  canEdit,
+  canManageUsers,
+  canViewCalendar,
+  canViewOwnShifts,
+}: AdminDashboardProps) {
   const [data, setData] = useState(initialData)
   const router = useRouter()
 
@@ -52,6 +61,23 @@ export function AdminDashboard({ initialData, currentUser, canEdit, canManageUse
             </div>
           </div>
           <div className="flex items-center gap-4">
+            {canViewCalendar ? (
+              <a
+                href="/admin/calendar"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Kalendár
+              </a>
+            ) : canViewOwnShifts ? (
+              <a
+                href="/admin/my-shifts"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Moje zmeny
+              </a>
+            ) : null}
             {canManageUsers && (
               <a
                 href="/admin/users"

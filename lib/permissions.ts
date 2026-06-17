@@ -21,6 +21,10 @@ export type Capability =
   | 'calendar:read_own' // view only own shifts
   | 'calendar:write' // create / edit / cancel shifts
   | 'calendar:delete' // permanently delete shifts
+  // Inventory / stock
+  | 'inventory:read' // view items, stock, movements
+  | 'inventory:write' // create / edit items, record stock movements
+  | 'inventory:delete' // permanently delete inventory items
 
 const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
   owner: [
@@ -33,6 +37,9 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'calendar:read_own',
     'calendar:write',
     'calendar:delete',
+    'inventory:read',
+    'inventory:write',
+    'inventory:delete',
   ],
   admin: [
     'cms:read',
@@ -44,8 +51,20 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'calendar:read_own',
     'calendar:write',
     'calendar:delete',
+    'inventory:read',
+    'inventory:write',
+    'inventory:delete',
   ],
-  manager: ['cms:read', 'cms:write', 'users:read', 'calendar:read_all', 'calendar:read_own', 'calendar:write'],
+  manager: [
+    'cms:read',
+    'cms:write',
+    'users:read',
+    'calendar:read_all',
+    'calendar:read_own',
+    'calendar:write',
+    'inventory:read',
+    'inventory:write',
+  ],
   content_editor: ['cms:read', 'cms:write'],
   staff: ['cms:read', 'calendar:read_own'],
 }

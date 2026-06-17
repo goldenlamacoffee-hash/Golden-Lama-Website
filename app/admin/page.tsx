@@ -14,6 +14,10 @@ export default async function AdminPage() {
 
   const data = await getSiteData()
 
+  // The mobile app admin is a separate system; only owner/admin may see the link.
+  const appAdminUrl = process.env.APP_ADMIN_URL || 'https://admin.goldenlama.sk/'
+  const canViewAppAdmin = user.role === 'owner' || user.role === 'admin'
+
   return (
     <AdminDashboard
       initialData={data}
@@ -22,6 +26,8 @@ export default async function AdminPage() {
       canManageUsers={can(user.role, 'users:read')}
       canViewCalendar={can(user.role, 'calendar:read_all')}
       canViewOwnShifts={can(user.role, 'calendar:read_own')}
+      canViewAppAdmin={canViewAppAdmin}
+      appAdminUrl={appAdminUrl}
     />
   )
 }

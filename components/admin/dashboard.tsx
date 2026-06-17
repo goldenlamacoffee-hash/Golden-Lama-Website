@@ -13,7 +13,7 @@ import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
 import type { AdminRole } from "@/lib/permissions"
 import { ROLE_LABELS } from "@/lib/permissions"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays } from "lucide-react"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, ExternalLink, Smartphone } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
@@ -22,6 +22,8 @@ interface AdminDashboardProps {
   canManageUsers: boolean
   canViewCalendar: boolean
   canViewOwnShifts: boolean
+  canViewAppAdmin: boolean
+  appAdminUrl: string
 }
 
 export function AdminDashboard({
@@ -31,6 +33,8 @@ export function AdminDashboard({
   canManageUsers,
   canViewCalendar,
   canViewOwnShifts,
+  canViewAppAdmin,
+  appAdminUrl,
 }: AdminDashboardProps) {
   const [data, setData] = useState(initialData)
   const router = useRouter()
@@ -108,6 +112,30 @@ export function AdminDashboard({
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
+        {canViewAppAdmin && (
+          <div className="mb-6 flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                <Smartphone className="h-5 w-5 text-[#E09E14]" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Správa aplikácie</h2>
+                <p className="text-sm text-[#8C6F4E]">
+                  Menu, kupóny, udalosti, lokality a nastavenia mobilnej aplikácie
+                </p>
+              </div>
+            </div>
+            <Button
+              asChild
+              className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 shrink-0"
+            >
+              <a href={appAdminUrl} target="_blank" rel="noopener noreferrer">
+                Otvoriť App Admin
+                <ExternalLink className="h-4 w-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
         {!canEdit && (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-4 py-3 text-sm text-[#F5E3C2]">
             <Lock className="h-4 w-4 text-[#E09E14]" />

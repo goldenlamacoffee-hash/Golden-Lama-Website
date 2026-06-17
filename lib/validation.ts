@@ -127,7 +127,8 @@ export function validateInventoryItem(input: {
     return { ok: false, message: 'Neplatný druh položky.' }
   }
   const stock = parseOptionalNumber(input.stockQuantity)
-  if (stock === undefined || stock === null || stock < 0) {
+  // Stock is optional and defaults to 0; only reject when explicitly invalid or negative.
+  if (stock === undefined || (stock !== null && stock < 0)) {
     return { ok: false, message: 'Neplatné množstvo na sklade.' }
   }
   for (const [val, label] of [

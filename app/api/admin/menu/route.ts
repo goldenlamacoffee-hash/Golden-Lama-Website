@@ -1,30 +1,22 @@
 import { NextResponse } from 'next/server'
 import { getContent, setContent } from '@/lib/data'
-import { verifyAuth } from '@/lib/auth'
+import { requireCapability } from '@/lib/api-auth'
+import { logAudit } from '@/lib/auth'
 
 export async function GET() {
   const menu = await getContent('menu')
   return NextResponse.json(menu)
 }
 
-export async function POST(request: Request) {
-  const isAuth = await verifyAuth()
-  if (!isAuth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+async function save(request: Request) {
+  const auth = await requireCapability('cms:write')
+  if ('response' in auth) return auth.response
 
   const menu = await request.json()
   await setContent('menu', menu)
+  await logAudit({ actorUserId: auth.user.id, actorEmail: auth.user.email, action: 'cms_update', details: { key: 'menu' } })
   return NextResponse.json({ success: true })
 }
 
-export async function PUT(request: Request) {
-  const isAuth = await verifyAuth()
-  if (!isAuth) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const menu = await request.json()
-  await setContent('menu', menu)
-  return NextResponse.json({ success: true })
-}
+export const POST = save
+export const PUT = save

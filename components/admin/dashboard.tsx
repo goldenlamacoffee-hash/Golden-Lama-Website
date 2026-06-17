@@ -11,13 +11,18 @@ import { GalleryEditor } from "./gallery-editor"
 import { ContentEditor } from "./content-editor"
 import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText } from "lucide-react"
+import type { AdminRole } from "@/lib/permissions"
+import { ROLE_LABELS } from "@/lib/permissions"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
+  currentUser: { name: string; email: string; role: AdminRole }
+  canEdit: boolean
+  canManageUsers: boolean
 }
 
-export function AdminDashboard({ initialData }: AdminDashboardProps) {
+export function AdminDashboard({ initialData, currentUser, canEdit, canManageUsers }: AdminDashboardProps) {
   const [data, setData] = useState(initialData)
   const router = useRouter()
 
@@ -39,9 +44,23 @@ export function AdminDashboard({ initialData }: AdminDashboardProps) {
               height={40}
               className="rounded-full"
             />
-            <h1 className="font-heading text-xl text-[#F5E3C2]">Admin Panel</h1>
+            <div>
+              <h1 className="font-heading text-xl text-[#F5E3C2] leading-tight">Admin Panel</h1>
+              <p className="text-xs text-[#8C6F4E]">
+                {currentUser.name} · {ROLE_LABELS[currentUser.role]}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
+            {canManageUsers && (
+              <a
+                href="/admin/users"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <Users className="h-4 w-4" />
+                Používatelia
+              </a>
+            )}
             <a 
               href="/" 
               target="_blank" 
@@ -63,6 +82,12 @@ export function AdminDashboard({ initialData }: AdminDashboardProps) {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
+        {!canEdit && (
+          <div className="mb-6 flex items-center gap-2 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-4 py-3 text-sm text-[#F5E3C2]">
+            <Lock className="h-4 w-4 text-[#E09E14]" />
+            Máte prístup iba na čítanie. Zmeny nebude možné uložiť.
+          </div>
+        )}
         <Tabs defaultValue="menu" className="space-y-6">
           <TabsList className="bg-[#3a251a] border border-[#8C6F4E]/30">
             <TabsTrigger 

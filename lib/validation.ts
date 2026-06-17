@@ -35,10 +35,19 @@ export interface ShiftCheck {
   message?: string
 }
 
-/** Validates the shape of a shift payload. start/end are HH:MM strings. */
+const ENTRY_TYPE_VALUES = ['work_shift', 'vacation', 'sick_leave', 'unavailable', 'training', 'other']
+const STATUS_VALUES = ['draft', 'published', 'cancelled']
+
+/**
+ * Validates the shape of a calendar entry payload. Supports multi-day ranges,
+ * entry types, and all-day entries (where times are omitted).
+ */
 export function validateShift(input: {
   staffUserId?: unknown
-  shiftDate?: unknown
+  entryType?: unknown
+  allDay?: unknown
+  startDate?: unknown
+  endDate?: unknown
   startTime?: unknown
   endTime?: unknown
   status?: unknown
@@ -46,20 +55,36 @@ export function validateShift(input: {
   if (typeof input.staffUserId !== 'string' || input.staffUserId.length === 0) {
     return { ok: false, message: 'Vyberte zamestnanca.' }
   }
-  if (!isValidDate(input.shiftDate)) {
-    return { ok: false, message: 'Neplatný dátum zmeny.' }
+  if (input.entryType !== undefined && !ENTRY_TYPE_VALUES.includes(input.entryType as string)) {
+    return { ok: false, message: 'Neplatný typ záznamu.' }
   }
-  if (!isValidTime(input.startTime) || !isValidTime(input.endTime)) {
-    return { ok: false, message: 'Neplatný čas zmeny.' }
+  if (!isValidDate(input.startDate)) {
+    return { ok: false, message: 'Neplatný dátum začiatku.' }
   }
-  if ((input.startTime as string) >= (input.endTime as string)) {
-    return { ok: false, message: 'Koniec zmeny musí byť po jej začiatku.' }
+  if (!isValidDate(input.endDate)) {
+    return { ok: false, message: 'Neplatný dátum konca.' }
   }
-  if (
-    input.status !== undefined &&
-    !['draft', 'published', 'cancelled'].includes(input.status as string)
-  ) {
-    return { ok: false, message: 'Neplatný stav zmeny.' }
+  if ((input.endDate as string) < (input.startDate as string)) {
+    return { ok: false, message: 'Dátum konca musí byť rovnaký alebo neskorší ako začiatok.' }
+  }
+
+  const allDay = input.allDay === true
+
+  if (!allDay) {
+    if (!isValidTime(input.startTime) || !isValidTime(input.endTime)) {
+      return { ok: false, message: 'Neplatný čas. Zadajte časy alebo zvoľte celodenný záznam.' }
+    }
+    // Time ordering only matters within a single day; multi-day ranges span midnight.
+    if (
+      (input.startDate as string) === (input.endDate as string) &&
+      (input.startTime as string) >= (input.endTime as string)
+    ) {
+      return { ok: false, message: 'Koniec musí byť po začiatku.' }
+    }
+  }
+
+  if (input.status !== undefined && !STATUS_VALUES.includes(input.status as string)) {
+    return { ok: false, message: 'Neplatný stav záznamu.' }
   }
   return { ok: true }
 }

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -48,22 +49,37 @@ import {
   MapPin,
   CalendarRange,
   List,
+  AlertTriangle,
 } from "lucide-react"
 
 export type ShiftStatus = "draft" | "published" | "cancelled"
+export type EntryType = "work_shift" | "vacation" | "sick_leave" | "unavailable" | "training" | "other"
 
 export interface ShiftDto {
   id: string
   staffUserId: string
   staffName: string
   staffEmail: string
-  shiftDate: string
-  startTime: string
-  endTime: string
+  entryType: EntryType
+  allDay: boolean
+  startDate: string
+  endDate: string
+  startTime: string | null
+  endTime: string | null
   location: string
   position: string
   notes: string
   status: ShiftStatus
+}
+
+interface OverlapDto {
+  id: string
+  entryType: EntryType
+  startDate: string
+  endDate: string
+  allDay: boolean
+  startTime: string | null
+  endTime: string | null
 }
 
 interface StaffOption {
@@ -87,8 +103,23 @@ type ViewMode = "month" | "week" | "list"
 const statusMeta: Record<ShiftStatus, { label: string; className: string }> = {
   draft: { label: "Koncept", className: "bg-[#4a3526] text-[#F5E3C2]" },
   published: { label: "Zverejnené", className: "bg-[#E09E14] text-[#28170F]" },
-  cancelled: { label: "Zrušené", className: "bg-[#7a2e2e] text-[#F5E3C2] line-through" },
+  cancelled: { label: "Zrušené", className: "bg-[#7a2e2e] text-[#F5E3C2]" },
 }
+
+/** Each entry type drives the colored block in the calendar. */
+const typeMeta: Record<
+  EntryType,
+  { label: string; short: string; block: string; dot: string; timed: boolean }
+> = {
+  work_shift: { label: "Pracovná zmena", short: "Zmena", block: "bg-[#E09E14] text-[#28170F]", dot: "bg-[#E09E14]", timed: true },
+  training: { label: "Školenie", short: "Školenie", block: "bg-[#2f6f7a] text-[#F5E3C2]", dot: "bg-[#2f6f7a]", timed: true },
+  vacation: { label: "Dovolenka", short: "Dovolenka", block: "bg-[#3b6b4a] text-[#F5E3C2]", dot: "bg-[#3b6b4a]", timed: false },
+  sick_leave: { label: "PN / Choroba", short: "PN", block: "bg-[#9a5b2e] text-[#F5E3C2]", dot: "bg-[#9a5b2e]", timed: false },
+  unavailable: { label: "Nedostupný", short: "Nedostupný", block: "bg-[#5a4636] text-[#F5E3C2]", dot: "bg-[#5a4636]", timed: false },
+  other: { label: "Iné", short: "Iné", block: "bg-[#4a3526] text-[#F5E3C2]", dot: "bg-[#4a3526]", timed: false },
+}
+
+const ENTRY_TYPE_ORDER: EntryType[] = ["work_shift", "training", "vacation", "sick_leave", "unavailable", "other"]
 
 const SK_DAYS = ["Po", "Ut", "St", "Št", "Pi", "So", "Ne"]
 const SK_MONTHS = [
@@ -130,9 +161,33 @@ function formatLongDate(key: string): string {
   })
 }
 
+function formatShortDate(key: string): string {
+  return new Date(`${key}T00:00:00`).toLocaleDateString("sk-SK", {
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+  })
+}
+
+function isMultiDay(s: { startDate: string; endDate: string }): boolean {
+  return s.endDate > s.startDate
+}
+
+/** A compact summary of an entry's time/range for labels. */
+function entrySummary(s: ShiftDto): string {
+  if (isMultiDay(s)) {
+    return `${formatShortDate(s.startDate)} – ${formatShortDate(s.endDate)}`
+  }
+  if (s.allDay || !s.startTime || !s.endTime) return "Celý deň"
+  return `${s.startTime}–${s.endTime}`
+}
+
 const EMPTY_FORM = {
   staffUserId: "",
-  shiftDate: "",
+  entryType: "work_shift" as EntryType,
+  allDay: false,
+  startDate: "",
+  endDate: "",
   startTime: "08:00",
   endTime: "16:00",
   location: "",
@@ -164,11 +219,13 @@ export function CalendarManager({
 
   const [staffFilter, setStaffFilter] = useState<string>("all")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [typeFilter, setTypeFilter] = useState<string>("all")
 
   // dialogs
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<ShiftDto | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [overlapWarning, setOverlapWarning] = useState<OverlapDto[]>([])
   const [cancelTarget, setCancelTarget] = useState<ShiftDto | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ShiftDto | null>(null)
 
@@ -179,7 +236,6 @@ export function CalendarManager({
       return { from, to: addDays(from, 6) }
     }
     if (view === "list") {
-      // upcoming 60 days from today (or from cursor month start in personal view)
       const from = new Date(cursor)
       from.setHours(0, 0, 0, 0)
       return { from, to: addDays(from, 60) }
@@ -199,21 +255,22 @@ export function CalendarManager({
     })
     if (canReadAll && staffFilter !== "all") params.set("staff", staffFilter)
     if (canReadAll && statusFilter !== "all") params.set("status", statusFilter)
+    if (typeFilter !== "all") params.set("type", typeFilter)
     try {
       const res = await fetch(`/api/admin/shifts?${params.toString()}`)
       if (!res.ok) {
-        setError("Nepodarilo sa načítať zmeny.")
+        setError("Nepodarilo sa načítať záznamy.")
         setShifts([])
       } else {
         const data = await res.json()
         setShifts(data.shifts ?? [])
       }
     } catch {
-      setError("Nepodarilo sa načítať zmeny.")
+      setError("Nepodarilo sa načítať záznamy.")
     } finally {
       setLoading(false)
     }
-  }, [range.from, range.to, staffFilter, statusFilter, canReadAll])
+  }, [range.from, range.to, staffFilter, statusFilter, typeFilter, canReadAll])
 
   useEffect(() => {
     loadShifts()
@@ -227,15 +284,36 @@ export function CalendarManager({
       .catch(() => setStaff([]))
   }, [canWrite])
 
+  // Expand each entry across every day in its range that falls inside the
+  // visible window, so multi-day entries appear on every relevant calendar cell.
   const shiftsByDay = useMemo(() => {
     const map = new Map<string, ShiftDto[]>()
+    const winFrom = toDateKey(range.from)
+    const winTo = toDateKey(range.to)
     for (const s of shifts) {
-      const arr = map.get(s.shiftDate) ?? []
-      arr.push(s)
-      map.set(s.shiftDate, arr)
+      let cur = new Date(`${s.startDate}T00:00:00`)
+      const end = new Date(`${s.endDate}T00:00:00`)
+      while (cur <= end) {
+        const key = toDateKey(cur)
+        if (key >= winFrom && key <= winTo) {
+          const arr = map.get(key) ?? []
+          arr.push(s)
+          map.set(key, arr)
+        }
+        cur = addDays(cur, 1)
+      }
+    }
+    // Sort each day's entries: timed work first by start time, then all-day.
+    for (const arr of map.values()) {
+      arr.sort((a, b) => {
+        if (a.allDay !== b.allDay) return a.allDay ? 1 : -1
+        const at = a.startTime ?? "99:99"
+        const bt = b.startTime ?? "99:99"
+        return at.localeCompare(bt)
+      })
     }
     return map
-  }, [shifts])
+  }, [shifts, range.from, range.to])
 
   const handleLogout = async () => {
     await fetch("/api/admin/logout", { method: "POST" })
@@ -245,7 +323,9 @@ export function CalendarManager({
 
   const openCreate = (dateKey?: string) => {
     setEditing(null)
-    setForm({ ...EMPTY_FORM, shiftDate: dateKey ?? toDateKey(new Date()), staffUserId: staff[0]?.id ?? "" })
+    const d = dateKey ?? toDateKey(new Date())
+    setForm({ ...EMPTY_FORM, startDate: d, endDate: d, staffUserId: staff[0]?.id ?? "" })
+    setOverlapWarning([])
     setError("")
     setFormOpen(true)
   }
@@ -254,16 +334,29 @@ export function CalendarManager({
     setEditing(s)
     setForm({
       staffUserId: s.staffUserId,
-      shiftDate: s.shiftDate,
-      startTime: s.startTime,
-      endTime: s.endTime,
+      entryType: s.entryType,
+      allDay: s.allDay,
+      startDate: s.startDate,
+      endDate: s.endDate,
+      startTime: s.startTime ?? "08:00",
+      endTime: s.endTime ?? "16:00",
       location: s.location,
       position: s.position,
       notes: s.notes,
       status: s.status,
     })
+    setOverlapWarning([])
     setError("")
     setFormOpen(true)
+  }
+
+  // Keep endDate >= startDate as the user edits the start.
+  const onStartDateChange = (value: string) => {
+    setForm((f) => ({
+      ...f,
+      startDate: value,
+      endDate: f.endDate && f.endDate >= value ? f.endDate : value,
+    }))
   }
 
   const submitForm = async () => {
@@ -272,17 +365,33 @@ export function CalendarManager({
     try {
       const url = editing ? `/api/admin/shifts/${editing.id}` : "/api/admin/shifts"
       const method = editing ? "PATCH" : "POST"
+      const payload = {
+        staffUserId: form.staffUserId,
+        entryType: form.entryType,
+        allDay: form.allDay,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        startTime: form.allDay ? null : form.startTime,
+        endTime: form.allDay ? null : form.endTime,
+        location: form.location,
+        position: form.position,
+        notes: form.notes,
+        status: form.status,
+      }
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
-        setError(data.error ?? "Nepodarilo sa uložiť zmenu.")
+        setError(data.error ?? "Nepodarilo sa uložiť záznam.")
         return
       }
       setFormOpen(false)
+      if (Array.isArray(data.overlaps) && data.overlaps.length > 0) {
+        setOverlapWarning(data.overlaps)
+      }
       await loadShifts()
     } finally {
       setBusy(false)
@@ -328,7 +437,7 @@ export function CalendarManager({
       const to = addDays(from, 6)
       return `${from.getDate()}. ${SK_MONTHS[from.getMonth()]} – ${to.getDate()}. ${SK_MONTHS[to.getMonth()]} ${to.getFullYear()}`
     }
-    return personalView ? "Nadchádzajúce zmeny" : "Zoznam zmien"
+    return personalView ? "Nadchádzajúce záznamy" : "Zoznam záznamov"
   }, [view, cursor, personalView])
 
   const step = (dir: number) => {
@@ -430,6 +539,20 @@ export function CalendarManager({
               </button>
             </div>
 
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[160px] bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                <SelectValue placeholder="Typ" />
+              </SelectTrigger>
+              <SelectContent className="bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                <SelectItem value="all">Všetky typy</SelectItem>
+                {ENTRY_TYPE_ORDER.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {typeMeta[t].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {canReadAll && (
               <>
                 <Select value={staffFilter} onValueChange={setStaffFilter}>
@@ -462,11 +585,31 @@ export function CalendarManager({
             {canWrite && (
               <Button onClick={() => openCreate()} className="bg-[#E09E14] hover:bg-[#c88a10] text-[#28170F]">
                 <Plus className="h-4 w-4 mr-2" />
-                Nová zmena
+                Nový záznam
               </Button>
             )}
           </div>
         </div>
+
+        {/* Legend */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4">
+          {ENTRY_TYPE_ORDER.map((t) => (
+            <div key={t} className="flex items-center gap-1.5 text-xs text-[#8C6F4E]">
+              <span className={`inline-block h-2.5 w-2.5 rounded-sm ${typeMeta[t].dot}`} />
+              {typeMeta[t].label}
+            </div>
+          ))}
+        </div>
+
+        {overlapWarning.length > 0 && (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-[#E09E14]/50 bg-[#E09E14]/10 px-4 py-3 text-sm text-[#F5E3C2]">
+            <AlertTriangle className="h-4 w-4 mt-0.5 text-[#E09E14] shrink-0" />
+            <span>
+              Upozornenie: tento zamestnanec má v zvolenom období {overlapWarning.length}{" "}
+              {overlapWarning.length === 1 ? "prekrývajúci sa záznam" : "prekrývajúce sa záznamy"}. Záznam bol napriek tomu uložený.
+            </span>
+          </div>
+        )}
 
         {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
 
@@ -481,6 +624,7 @@ export function CalendarManager({
             shiftsByDay={shiftsByDay}
             todayKey={todayKey}
             canWrite={canWrite}
+            showStaff={canReadAll}
             onAdd={openCreate}
             onSelect={openEdit}
           />
@@ -512,10 +656,10 @@ export function CalendarManager({
         <DialogContent className="bg-[#3a251a] border-[#8C6F4E]/30 text-[#F5E3C2] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-[#F5E3C2]">
-              {editing ? "Upraviť zmenu" : "Nová zmena"}
+              {editing ? "Upraviť záznam" : "Nový záznam"}
             </DialogTitle>
             <DialogDescription className="text-[#8C6F4E]">
-              {editing ? "Upravte detaily pracovnej zmeny." : "Naplánujte novú pracovnú zmenu."}
+              {editing ? "Upravte detaily záznamu v kalendári." : "Naplánujte zmenu, dovolenku alebo inú neprítomnosť."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -534,35 +678,87 @@ export function CalendarManager({
                 </SelectContent>
               </Select>
             </div>
+
             <div className="space-y-2">
-              <Label className="text-[#F5E3C2]">Dátum</Label>
-              <Input
-                type="date"
-                value={form.shiftDate}
-                onChange={(e) => setForm((f) => ({ ...f, shiftDate: e.target.value }))}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
+              <Label className="text-[#F5E3C2]">Typ záznamu</Label>
+              <Select
+                value={form.entryType}
+                onValueChange={(v) =>
+                  setForm((f) => {
+                    const next = v as EntryType
+                    // Non-work types default to all-day for convenience.
+                    const allDay = typeMeta[next].timed ? f.allDay : true
+                    return { ...f, entryType: next, allDay }
+                  })
+                }
+              >
+                <SelectTrigger className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                  {ENTRY_TYPE_ORDER.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {typeMeta[t].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-[#F5E3C2]">Začiatok</Label>
+                <Label className="text-[#F5E3C2]">Dátum od</Label>
                 <Input
-                  type="time"
-                  value={form.startTime}
-                  onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                  type="date"
+                  value={form.startDate}
+                  onChange={(e) => onStartDateChange(e.target.value)}
                   className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
                 />
               </div>
               <div className="space-y-2">
-                <Label className="text-[#F5E3C2]">Koniec</Label>
+                <Label className="text-[#F5E3C2]">Dátum do</Label>
                 <Input
-                  type="time"
-                  value={form.endTime}
-                  onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                  type="date"
+                  value={form.endDate}
+                  min={form.startDate || undefined}
+                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
                   className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
                 />
               </div>
             </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <Checkbox
+                checked={form.allDay}
+                onCheckedChange={(c) => setForm((f) => ({ ...f, allDay: c === true }))}
+                className="border-[#8C6F4E]/60 data-[state=checked]:bg-[#E09E14] data-[state=checked]:border-[#E09E14] data-[state=checked]:text-[#28170F]"
+              />
+              <span className="text-sm text-[#F5E3C2]">Celodenný záznam (bez konkrétneho času)</span>
+            </label>
+
+            {!form.allDay && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-[#F5E3C2]">Začiatok</Label>
+                  <Input
+                    type="time"
+                    value={form.startTime}
+                    onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                    className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[#F5E3C2]">Koniec</Label>
+                  <Input
+                    type="time"
+                    value={form.endTime}
+                    onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                    className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label className="text-[#F5E3C2]">Prevádzka</Label>
@@ -631,9 +827,9 @@ export function CalendarManager({
       <AlertDialog open={!!cancelTarget} onOpenChange={(o) => !o && setCancelTarget(null)}>
         <AlertDialogContent className="bg-[#3a251a] border-[#8C6F4E]/30 text-[#F5E3C2]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#F5E3C2]">Zrušiť zmenu?</AlertDialogTitle>
+            <AlertDialogTitle className="text-[#F5E3C2]">Zrušiť záznam?</AlertDialogTitle>
             <AlertDialogDescription className="text-[#8C6F4E]">
-              Zmena bude označená ako zrušená. Zostane viditeľná v kalendári so stavom „Zrušené“.
+              Záznam bude označený ako zrušený. Zostane viditeľný v kalendári so stavom „Zrušené“.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -645,7 +841,7 @@ export function CalendarManager({
               disabled={busy}
               className="bg-[#7a2e2e] hover:bg-[#682727] text-[#F5E3C2]"
             >
-              Zrušiť zmenu
+              Zrušiť záznam
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -655,9 +851,9 @@ export function CalendarManager({
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent className="bg-[#3a251a] border-[#8C6F4E]/30 text-[#F5E3C2]">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-[#F5E3C2]">Natrvalo zmazať zmenu?</AlertDialogTitle>
+            <AlertDialogTitle className="text-[#F5E3C2]">Natrvalo zmazať záznam?</AlertDialogTitle>
             <AlertDialogDescription className="text-[#8C6F4E]">
-              Táto akcia sa nedá vrátiť. Zmena bude úplne odstránená z kalendára.
+              Táto akcia sa nedá vrátiť. Záznam bude úplne odstránený z kalendára.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -678,6 +874,22 @@ export function CalendarManager({
   )
 }
 
+/* ---------- shared block label ---------- */
+
+function blockClass(s: ShiftDto): string {
+  const base = typeMeta[s.entryType].block
+  if (s.status === "cancelled") return `${base} line-through opacity-60`
+  if (s.status === "draft") return `${base} opacity-60 ring-1 ring-inset ring-[#F5E3C2]/30`
+  return base
+}
+
+function blockLabel(s: ShiftDto, showStaff: boolean): string {
+  const timed = typeMeta[s.entryType].timed && !s.allDay && s.startTime
+  const lead = timed ? `${s.startTime} ` : ""
+  if (showStaff) return `${lead}${s.staffName}`
+  return `${lead}${typeMeta[s.entryType].short}`
+}
+
 /* ---------- Month grid ---------- */
 
 function MonthGrid({
@@ -685,6 +897,7 @@ function MonthGrid({
   shiftsByDay,
   todayKey,
   canWrite,
+  showStaff,
   onAdd,
   onSelect,
 }: {
@@ -692,6 +905,7 @@ function MonthGrid({
   shiftsByDay: Map<string, ShiftDto[]>
   todayKey: string
   canWrite: boolean
+  showStaff: boolean
   onAdd: (dateKey: string) => void
   onSelect: (s: ShiftDto) => void
 }) {
@@ -737,7 +951,7 @@ function MonthGrid({
                   <button
                     onClick={() => onAdd(key)}
                     className="text-[#8C6F4E] hover:text-[#E09E14]"
-                    aria-label={`Pridať zmenu ${key}`}
+                    aria-label={`Pridať záznam ${key}`}
                   >
                     <Plus className="h-3.5 w-3.5" />
                   </button>
@@ -746,12 +960,12 @@ function MonthGrid({
               <div className="space-y-1">
                 {dayShifts.slice(0, 3).map((s) => (
                   <button
-                    key={s.id}
+                    key={`${s.id}-${key}`}
                     onClick={() => onSelect(s)}
-                    className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] leading-tight truncate ${statusMeta[s.status].className}`}
-                    title={`${s.staffName} · ${s.startTime}-${s.endTime}`}
+                    className={`w-full text-left rounded px-1.5 py-0.5 text-[11px] leading-tight truncate ${blockClass(s)}`}
+                    title={`${typeMeta[s.entryType].label} · ${s.staffName} · ${entrySummary(s)}`}
                   >
-                    {s.startTime} {s.staffName}
+                    {blockLabel(s, showStaff)}
                   </button>
                 ))}
                 {dayShifts.length > 3 && (
@@ -810,18 +1024,22 @@ function WeekGrid({
               )}
             </div>
             <div className="space-y-1.5">
-              {dayShifts.length === 0 && <p className="text-[11px] text-[#8C6F4E]">Žiadne zmeny</p>}
+              {dayShifts.length === 0 && <p className="text-[11px] text-[#8C6F4E]">Žiadne záznamy</p>}
               {dayShifts.map((s) => (
                 <button
-                  key={s.id}
+                  key={`${s.id}-${key}`}
                   onClick={() => onSelect(s)}
-                  className={`w-full text-left rounded px-2 py-1 text-xs ${statusMeta[s.status].className}`}
+                  className={`w-full text-left rounded px-2 py-1 text-xs ${blockClass(s)}`}
                 >
                   <div className="font-medium">
-                    {s.startTime}–{s.endTime}
+                    {typeMeta[s.entryType].timed && !s.allDay && s.startTime
+                      ? `${s.startTime}–${s.endTime}`
+                      : typeMeta[s.entryType].short}
                   </div>
                   {showStaff && <div className="truncate">{s.staffName}</div>}
-                  {s.position && <div className="opacity-80 truncate">{s.position}</div>}
+                  {typeMeta[s.entryType].timed && s.position && (
+                    <div className="opacity-80 truncate">{s.position}</div>
+                  )}
                 </button>
               ))}
             </div>
@@ -854,17 +1072,17 @@ function ShiftList({
   if (shifts.length === 0) {
     return (
       <div className="rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] py-16 text-center text-[#8C6F4E]">
-        Žiadne zmeny v tomto období.
+        Žiadne záznamy v tomto období.
       </div>
     )
   }
 
-  // group by date
+  // group by start date
   const groups = new Map<string, ShiftDto[]>()
   for (const s of shifts) {
-    const arr = groups.get(s.shiftDate) ?? []
+    const arr = groups.get(s.startDate) ?? []
     arr.push(s)
-    groups.set(s.shiftDate, arr)
+    groups.set(s.startDate, arr)
   }
 
   return (
@@ -876,14 +1094,19 @@ function ShiftList({
             {items.map((s) => (
               <div key={s.id} className="flex items-center justify-between gap-4 px-4 py-3">
                 <div className="flex items-center gap-4 min-w-0">
+                  <span
+                    className={`inline-block h-8 w-1.5 rounded-full ${typeMeta[s.entryType].dot} shrink-0`}
+                    aria-hidden
+                  />
                   <div className="flex items-center gap-1.5 text-[#F5E3C2] text-sm whitespace-nowrap">
                     <Clock className="h-4 w-4 text-[#8C6F4E]" />
-                    {s.startTime}–{s.endTime}
+                    {entrySummary(s)}
                   </div>
                   <div className="min-w-0">
                     {showStaff && <div className="text-[#F5E3C2] font-medium truncate">{s.staffName}</div>}
                     <div className="flex items-center gap-2 text-xs text-[#8C6F4E]">
-                      {s.position && <span className="truncate">{s.position}</span>}
+                      <span className="truncate">{typeMeta[s.entryType].label}</span>
+                      {s.position && <span className="truncate">· {s.position}</span>}
                       {s.location && (
                         <span className="flex items-center gap-1 truncate">
                           <MapPin className="h-3 w-3" />
@@ -895,6 +1118,9 @@ function ShiftList({
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  {isMultiDay(s) && (
+                    <Badge className="bg-[#28170F] text-[#8C6F4E] border border-[#8C6F4E]/40">Viacdňové</Badge>
+                  )}
                   <Badge className={statusMeta[s.status].className}>{statusMeta[s.status].label}</Badge>
                   {canWrite && (
                     <>
@@ -911,7 +1137,7 @@ function ShiftList({
                         <Button
                           size="icon"
                           variant="ghost"
-                          title="Zrušiť zmenu"
+                          title="Zrušiť záznam"
                           onClick={() => onCancel(s)}
                           className="text-[#8C6F4E] hover:text-[#F5E3C2] hover:bg-[#8C6F4E]/10"
                         >

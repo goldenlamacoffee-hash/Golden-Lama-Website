@@ -2,7 +2,13 @@ import { NextResponse } from 'next/server'
 import { requireUser } from '@/lib/api-auth'
 import { can } from '@/lib/permissions'
 import { logAudit } from '@/lib/auth'
-import { listShifts, createShift, type ShiftStatus } from '@/lib/shifts'
+import {
+  listShifts,
+  createShift,
+  findOverlappingShifts,
+  type ShiftStatus,
+  type EntryType,
+} from '@/lib/shifts'
 import { validateShift } from '@/lib/validation'
 
 export async function GET(request: Request) {
@@ -20,10 +26,12 @@ export async function GET(request: Request) {
   const to = url.searchParams.get('to') ?? undefined
   const staffParam = url.searchParams.get('staff') ?? undefined
   const statusParam = (url.searchParams.get('status') as ShiftStatus | null) ?? undefined
+  const typeParam = (url.searchParams.get('type') as EntryType | null) ?? undefined
 
   const shifts = await listShifts({
     from,
     to,
+    entryType: typeParam,
     status: canReadAll ? statusParam : undefined,
     // Managers/admins/owners may filter by a specific staff member.
     staffUserId: canReadAll ? staffParam : undefined,
@@ -55,12 +63,24 @@ export async function POST(request: Request) {
   }
 
   const status = (body.status as ShiftStatus | undefined) ?? 'draft'
+  const entryType = (body.entryType as EntryType | undefined) ?? 'work_shift'
+  const allDay = body.allDay === true
+  const staffUserId = body.staffUserId as string
+  const startDate = body.startDate as string
+  const endDate = body.endDate as string
+
+  // Warn (but don't block) on overlapping entries for the same person.
+  const overlaps = await findOverlappingShifts({ staffUserId, startDate, endDate })
+
   const shift = await createShift(
     {
-      staffUserId: body.staffUserId as string,
-      shiftDate: body.shiftDate as string,
-      startTime: body.startTime as string,
-      endTime: body.endTime as string,
+      staffUserId,
+      entryType,
+      allDay,
+      startDate,
+      endDate,
+      startTime: allDay ? null : (body.startTime as string),
+      endTime: allDay ? null : (body.endTime as string),
       location: typeof body.location === 'string' ? body.location : '',
       position: typeof body.position === 'string' ? body.position : '',
       notes: typeof body.notes === 'string' ? body.notes : '',
@@ -74,8 +94,14 @@ export async function POST(request: Request) {
     actorEmail: auth.user.email,
     action: 'shift_created',
     targetUserId: shift.staffUserId,
-    details: { shiftId: shift.id, date: shift.shiftDate, status: shift.status },
+    details: {
+      shiftId: shift.id,
+      entryType: shift.entryType,
+      startDate: shift.startDate,
+      endDate: shift.endDate,
+      status: shift.status,
+    },
   })
 
-  return NextResponse.json({ shift }, { status: 201 })
+  return NextResponse.json({ shift, overlaps }, { status: 201 })
 }

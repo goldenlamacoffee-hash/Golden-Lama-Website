@@ -25,6 +25,13 @@ export type Capability =
   | 'inventory:read' // view items, stock, movements
   | 'inventory:write' // create / edit items, record stock movements
   | 'inventory:delete' // permanently delete inventory items
+  // Motivation / Golden Points
+  | 'motivation:read_all' // view team points, leaderboard, bonuses
+  | 'motivation:read_own' // view only own points and bonus estimate
+  | 'motivation:write' // add positive point events for staff
+  | 'motivation:write_negative' // add negative / correction point events
+  | 'motivation:manage_rules' // create / edit point rules
+  | 'motivation:manage_settings' // bonus periods, point value, quality multipliers
 
 const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
   owner: [
@@ -40,6 +47,12 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'inventory:read',
     'inventory:write',
     'inventory:delete',
+    'motivation:read_all',
+    'motivation:read_own',
+    'motivation:write',
+    'motivation:write_negative',
+    'motivation:manage_rules',
+    'motivation:manage_settings',
   ],
   admin: [
     'cms:read',
@@ -54,6 +67,12 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'inventory:read',
     'inventory:write',
     'inventory:delete',
+    'motivation:read_all',
+    'motivation:read_own',
+    'motivation:write',
+    'motivation:write_negative',
+    'motivation:manage_rules',
+    'motivation:manage_settings',
   ],
   manager: [
     'cms:read',
@@ -64,9 +83,12 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'calendar:write',
     'inventory:read',
     'inventory:write',
+    'motivation:read_all',
+    'motivation:read_own',
+    'motivation:write',
   ],
   content_editor: ['cms:read', 'cms:write'],
-  staff: ['cms:read', 'calendar:read_own'],
+  staff: ['cms:read', 'calendar:read_own', 'motivation:read_own'],
 }
 
 export function can(role: AdminRole | undefined | null, capability: Capability): boolean {

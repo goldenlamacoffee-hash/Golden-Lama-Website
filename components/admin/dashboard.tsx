@@ -13,7 +13,7 @@ import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
 import type { AdminRole } from "@/lib/permissions"
 import { ROLE_LABELS } from "@/lib/permissions"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, ExternalLink, Smartphone, Package } from "lucide-react"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, ExternalLink, Smartphone, Package, Trophy, Sparkles } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
@@ -23,6 +23,8 @@ interface AdminDashboardProps {
   canViewCalendar: boolean
   canViewOwnShifts: boolean
   canViewInventory: boolean
+  canViewMotivation: boolean
+  canViewOwnPoints: boolean
   canViewAppAdmin: boolean
   appAdminUrl: string
 }
@@ -35,6 +37,8 @@ export function AdminDashboard({
   canViewCalendar,
   canViewOwnShifts,
   canViewInventory,
+  canViewMotivation,
+  canViewOwnPoints,
   canViewAppAdmin,
   appAdminUrl,
 }: AdminDashboardProps) {
@@ -93,6 +97,23 @@ export function AdminDashboard({
                 Sklad
               </a>
             )}
+            {canViewMotivation ? (
+              <a
+                href="/admin/motivation"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <Trophy className="h-4 w-4" />
+                Motivácia
+              </a>
+            ) : canViewOwnPoints ? (
+              <a
+                href="/admin/my-points"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <Sparkles className="h-4 w-4" />
+                Moje body
+              </a>
+            ) : null}
             {canManageUsers && (
               <a
                 href="/admin/users"
@@ -162,6 +183,44 @@ export function AdminDashboard({
               <a href="/admin/inventory">
                 Otvoriť sklad
                 <Package className="h-4 w-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
+        {canViewMotivation && (
+          <div className="mb-6 flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                <Trophy className="h-5 w-5 text-[#E09E14]" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Motivácia tímu</h2>
+                <p className="text-sm text-[#8C6F4E]">Golden Points, rebríček a odhady bonusov</p>
+              </div>
+            </div>
+            <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 shrink-0">
+              <a href="/admin/motivation">
+                Otvoriť motiváciu
+                <Trophy className="h-4 w-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
+        {canViewOwnPoints && !canViewMotivation && (
+          <div className="mb-6 flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                <Sparkles className="h-5 w-5 text-[#E09E14]" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Moje body</h2>
+                <p className="text-sm text-[#8C6F4E]">Tvoje Golden Points, progres a odhad bonusu</p>
+              </div>
+            </div>
+            <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 shrink-0">
+              <a href="/admin/my-points">
+                Zobraziť moje body
+                <Sparkles className="h-4 w-4 ml-2" />
               </a>
             </Button>
           </div>

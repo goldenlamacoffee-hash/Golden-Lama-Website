@@ -267,7 +267,7 @@ export async function findOverlappingShifts(args: {
   startDate: string
   endDate: string
   excludeId?: string
-}): Promise<{ id: string; entryType: EntryType; startDate: string; endDate: string; allDay: boolean; startTime: string | null; endTime: string | null }[]> {
+}): Promise<{ id: string; staffUserId: string; staffName: string; entryType: EntryType; startDate: string; endDate: string; allDay: boolean; startTime: string | null; endTime: string | null; status: ShiftStatus }[]> {
   const params: unknown[] = [args.staffUserId, args.endDate, args.startDate]
   let exclude = ''
   if (args.excludeId) {
@@ -288,12 +288,15 @@ export async function findOverlappingShifts(args: {
     const m = mapShift(r)
     return {
       id: m.id,
+      staffUserId: m.staffUserId,
+      staffName: m.staffName,
       entryType: m.entryType,
       startDate: m.startDate,
       endDate: m.endDate,
       allDay: m.allDay,
       startTime: m.startTime,
       endTime: m.endTime,
+      status: m.status,
     }
   })
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect, useCallback } from "react"
+import { useState, useMemo, useEffect, useCallback, type ReactNode } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,8 @@ import {
   CalendarRange,
   List,
   AlertTriangle,
+  X,
+  User,
 } from "lucide-react"
 
 export type ShiftStatus = "draft" | "published" | "cancelled"
@@ -70,16 +72,21 @@ export interface ShiftDto {
   position: string
   notes: string
   status: ShiftStatus
+  createdAt?: string
+  updatedAt?: string
 }
 
 interface OverlapDto {
   id: string
+  staffUserId: string
+  staffName: string
   entryType: EntryType
   startDate: string
   endDate: string
   allDay: boolean
   startTime: string | null
   endTime: string | null
+  status: ShiftStatus
 }
 
 interface StaffOption {
@@ -277,6 +284,7 @@ export function CalendarManager({
   const [overlapWarning, setOverlapWarning] = useState<OverlapDto[]>([])
   const [cancelTarget, setCancelTarget] = useState<ShiftDto | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<ShiftDto | null>(null)
+  const [detailTarget, setDetailTarget] = useState<ShiftDto | null>(null)
 
   // Visible date range based on the current view.
   const range = useMemo(() => {
@@ -375,13 +383,24 @@ export function CalendarManager({
   const openCreate = (dateKey?: string) => {
     setEditing(null)
     const d = dateKey ?? toDateKey(new Date())
-    // Defaults depend on the page mode: work shifts are timed single-day entries,
-    // absences default to an all-day vacation.
-    const entryType: EntryType = isShiftMode ? "work_shift" : "vacation"
+    // Pick the default entry type:
+    // - shift mode: always work_shift
+    // - absence mode: prefill the currently selected type filter (if a specific
+    //   absence type is chosen), otherwise fall back to vacation.
+    let entryType: EntryType
+    if (isShiftMode) {
+      entryType = "work_shift"
+    } else if (typeFilter !== "all" && (ABSENCE_TYPES as string[]).includes(typeFilter)) {
+      entryType = typeFilter as EntryType
+    } else {
+      entryType = "vacation"
+    }
+    // Timed types (work shift, training) default to a concrete time; the rest are all-day.
+    const allDay = isShiftMode ? false : !typeMeta[entryType].timed
     setForm({
       ...EMPTY_FORM,
       entryType,
-      allDay: isShiftMode ? false : true,
+      allDay,
       startDate: d,
       endDate: d,
       staffUserId: staff[0]?.id ?? "",
@@ -390,6 +409,32 @@ export function CalendarManager({
     setError("")
     setFormOpen(true)
   }
+
+  const openDetail = (s: ShiftDto) => {
+    setDetailTarget(s)
+  }
+
+  // Clear the filters that could be hiding an overlapping record so the user can
+  // see and resolve the conflict. (Cross-mode conflicts live on the other planner
+  // and are called out separately in the warning.)
+  const showConflicts = () => {
+    setTypeFilter("all")
+    setStatusFilter("all")
+    if (canReadAll && overlapWarning[0]) {
+      setStaffFilter(overlapWarning[0].staffUserId)
+    }
+  }
+
+  // A conflict is hidden when it can't appear under the current view/filters:
+  // its type isn't shown on this page (cross-mode), or a type/status/staff filter excludes it.
+  const conflictHidden = (o: OverlapDto): boolean => {
+    if (!allowedTypes.includes(o.entryType)) return true
+    if (!isShiftMode && typeFilter !== "all" && o.entryType !== typeFilter) return true
+    if (canReadAll && statusFilter !== "all" && o.status !== statusFilter) return true
+    if (canReadAll && staffFilter !== "all" && o.staffUserId !== staffFilter) return true
+    return false
+  }
+  const anyConflictHidden = overlapWarning.some(conflictHidden)
 
   const openEdit = (s: ShiftDto) => {
     setEditing(s)
@@ -702,12 +747,62 @@ export function CalendarManager({
         )}
 
         {overlapWarning.length > 0 && (
-          <div className="mb-4 flex items-start gap-2 rounded-md border border-[#E09E14]/50 bg-[#E09E14]/10 px-4 py-3 text-sm text-[#F5E3C2]">
-            <AlertTriangle className="h-4 w-4 mt-0.5 text-[#E09E14] shrink-0" />
-            <span>
-              Upozornenie: tento zamestnanec má v zvolenom období {overlapWarning.length}{" "}
-              {overlapWarning.length === 1 ? "prekrývajúci sa záznam" : "prekrývajúce sa záznamy"}. Záznam bol napriek tomu uložený.
-            </span>
+          <div className="mb-4 rounded-md border border-[#E09E14]/50 bg-[#E09E14]/10 px-4 py-3 text-sm text-[#F5E3C2]">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 mt-0.5 text-[#E09E14] shrink-0" />
+              <div className="min-w-0">
+                <p className="font-medium">
+                  Záznam bol uložený, no {overlapWarning[0].staffName} má v tomto období{" "}
+                  {overlapWarning.length}{" "}
+                  {overlapWarning.length === 1 ? "prekrývajúci sa záznam" : "prekrývajúce sa záznamy"}.
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {overlapWarning.map((o) => (
+                    <li key={o.id} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[#F5E3C2]/90">
+                      <span className={`inline-block h-2.5 w-2.5 rounded-sm ${typeMeta[o.entryType].dot}`} />
+                      <span className="font-medium">{typeMeta[o.entryType].label}</span>
+                      <span className="text-[#F5E3C2]/70">
+                        {isMultiDay(o)
+                          ? `${formatShortDate(o.startDate)} – ${formatShortDate(o.endDate)}`
+                          : formatShortDate(o.startDate)}
+                        {!o.allDay && o.startTime ? ` · ${o.startTime}–${o.endTime}` : " · celý deň"}
+                      </span>
+                      <Badge className={statusMeta[o.status].className}>{statusMeta[o.status].label}</Badge>
+                      {conflictHidden(o) && (
+                        <span className="text-xs text-[#E09E14]">(skrytý filtrom)</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+                {anyConflictHidden && (
+                  <p className="mt-2 text-xs text-[#F5E3C2]/70">
+                    Konfliktný záznam môže byť skrytý aktuálnym filtrom
+                    {overlapWarning.some((o) => !allowedTypes.includes(o.entryType))
+                      ? " alebo sa nachádza na inej stránke (zmeny/neprítomnosti)."
+                      : "."}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setOverlapWarning([])}
+                className="ml-auto shrink-0 text-[#8C6F4E] hover:text-[#F5E3C2]"
+                aria-label="Zavrieť upozornenie"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {anyConflictHidden && (canReadAll || !isShiftMode) && (
+              <div className="mt-3 pl-6">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={showConflicts}
+                  className="border-[#E09E14]/50 bg-transparent text-[#E09E14] hover:bg-[#E09E14]/10"
+                >
+                  Zobraziť konflikty
+                </Button>
+              </div>
+            )}
           </div>
         )}
 
@@ -726,7 +821,7 @@ export function CalendarManager({
             canWrite={canWrite}
             showStaff={canReadAll}
             onAdd={openCreate}
-            onSelect={openEdit}
+            onSelect={openDetail}
           />
         ) : view === "week" ? (
           <WeekGrid
@@ -735,7 +830,7 @@ export function CalendarManager({
             todayKey={todayKey}
             canWrite={canWrite}
             onAdd={openCreate}
-            onSelect={openEdit}
+            onSelect={openDetail}
             showStaff={canReadAll}
           />
         ) : (
@@ -744,6 +839,7 @@ export function CalendarManager({
             canWrite={canWrite}
             canDelete={canDelete}
             showStaff={canReadAll}
+            onSelect={openDetail}
             onEdit={openEdit}
             onCancel={setCancelTarget}
             onDelete={setDeleteTarget}
@@ -982,6 +1078,134 @@ export function CalendarManager({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Record detail + actions */}
+      <Dialog open={!!detailTarget} onOpenChange={(o) => !o && setDetailTarget(null)}>
+        <DialogContent className="bg-[#3a251a] border-[#8C6F4E]/30 text-[#F5E3C2]">
+          {detailTarget && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-[#F5E3C2] flex items-center gap-2">
+                  <span className={`inline-block h-3 w-3 rounded-sm ${typeMeta[detailTarget.entryType].dot}`} />
+                  {typeMeta[detailTarget.entryType].label}
+                </DialogTitle>
+                <DialogDescription className="text-[#8C6F4E]">Detail záznamu</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2.5 py-1 text-sm">
+                <DetailRow icon={<User className="h-4 w-4" />} label="Zamestnanec" value={detailTarget.staffName} />
+                <DetailRow
+                  icon={<CalendarDays className="h-4 w-4" />}
+                  label="Dátum"
+                  value={
+                    isMultiDay(detailTarget)
+                      ? `${formatShortDate(detailTarget.startDate)} – ${formatShortDate(detailTarget.endDate)}`
+                      : formatShortDate(detailTarget.startDate)
+                  }
+                />
+                <DetailRow
+                  icon={<Clock className="h-4 w-4" />}
+                  label="Čas"
+                  value={
+                    detailTarget.allDay || !detailTarget.startTime
+                      ? "Celý deň"
+                      : `${detailTarget.startTime} – ${detailTarget.endTime}`
+                  }
+                />
+                {detailTarget.location && (
+                  <DetailRow icon={<MapPin className="h-4 w-4" />} label="Prevádzka" value={detailTarget.location} />
+                )}
+                {detailTarget.position && (
+                  <DetailRow icon={<User className="h-4 w-4" />} label="Pozícia" value={detailTarget.position} />
+                )}
+                <div className="flex items-center gap-2">
+                  <span className="text-[#8C6F4E] w-28 shrink-0">Stav</span>
+                  <Badge className={statusMeta[detailTarget.status].className}>
+                    {statusMeta[detailTarget.status].label}
+                  </Badge>
+                </div>
+                {detailTarget.notes && (
+                  <div className="flex items-start gap-2">
+                    <span className="text-[#8C6F4E] w-28 shrink-0">Poznámka</span>
+                    <span className="text-[#F5E3C2] whitespace-pre-wrap">{detailTarget.notes}</span>
+                  </div>
+                )}
+                {(detailTarget.createdAt || detailTarget.updatedAt) && (
+                  <p className="pt-1 text-xs text-[#8C6F4E]">
+                    {detailTarget.createdAt && `Vytvorené ${formatShortDate(detailTarget.createdAt.slice(0, 10))}`}
+                    {detailTarget.updatedAt && ` · upravené ${formatShortDate(detailTarget.updatedAt.slice(0, 10))}`}
+                  </p>
+                )}
+              </div>
+              <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  variant="outline"
+                  onClick={() => setDetailTarget(null)}
+                  className="border-[#8C6F4E]/50 text-[#F5E3C2] hover:bg-[#8C6F4E]/20"
+                >
+                  Zavrieť
+                </Button>
+                {canWrite && (
+                  <>
+                    <Button
+                      onClick={() => {
+                        const t = detailTarget
+                        setDetailTarget(null)
+                        if (t) openEdit(t)
+                      }}
+                      className="bg-[#E09E14] hover:bg-[#c88a10] text-[#28170F]"
+                    >
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Upraviť
+                    </Button>
+                    {detailTarget.status !== "cancelled" && (
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          const t = detailTarget
+                          setDetailTarget(null)
+                          if (t) setCancelTarget(t)
+                        }}
+                        className="border-[#8C6F4E]/50 text-[#F5E3C2] hover:bg-[#8C6F4E]/20"
+                      >
+                        <Ban className="h-4 w-4 mr-2" />
+                        Zrušiť
+                      </Button>
+                    )}
+                  </>
+                )}
+                {canDelete && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const t = detailTarget
+                      setDetailTarget(null)
+                      if (t) setDeleteTarget(t)
+                    }}
+                    className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Zmazať
+                  </Button>
+                )}
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+/* ---------- detail row ---------- */
+
+function DetailRow({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[#8C6F4E] w-28 shrink-0 flex items-center gap-1.5">
+        {icon}
+        {label}
+      </span>
+      <span className="text-[#F5E3C2] min-w-0 truncate">{value}</span>
     </div>
   )
 }
@@ -1169,6 +1393,7 @@ function ShiftList({
   canWrite,
   canDelete,
   showStaff,
+  onSelect,
   onEdit,
   onCancel,
   onDelete,
@@ -1177,6 +1402,7 @@ function ShiftList({
   canWrite: boolean
   canDelete: boolean
   showStaff: boolean
+  onSelect: (s: ShiftDto) => void
   onEdit: (s: ShiftDto) => void
   onCancel: (s: ShiftDto) => void
   onDelete: (s: ShiftDto) => void
@@ -1205,7 +1431,11 @@ function ShiftList({
           <div className="rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] divide-y divide-[#8C6F4E]/15">
             {items.map((s) => (
               <div key={s.id} className="flex items-center justify-between gap-4 px-4 py-3">
-                <div className="flex items-center gap-4 min-w-0">
+                <button
+                  onClick={() => onSelect(s)}
+                  className="flex items-center gap-4 min-w-0 text-left rounded hover:bg-[#8C6F4E]/10 -mx-1 px-1 py-0.5"
+                  title="Zobraziť detail"
+                >
                   <span
                     className={`inline-block h-8 w-1.5 rounded-full ${typeMeta[s.entryType].dot} shrink-0`}
                     aria-hidden
@@ -1228,7 +1458,7 @@ function ShiftList({
                     </div>
                     {s.notes && <p className="text-xs text-[#F5E3C2]/60 mt-0.5 truncate">{s.notes}</p>}
                   </div>
-                </div>
+                </button>
                 <div className="flex items-center gap-2 shrink-0">
                   {isMultiDay(s) && (
                     <Badge className="bg-[#28170F] text-[#8C6F4E] border border-[#8C6F4E]/40">Viacdňové</Badge>

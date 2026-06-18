@@ -187,3 +187,161 @@ export function validateMovement(input: {
   }
   return { ok: true }
 }
+
+// ---------------------------------------------------------------------------
+// Motivation / Golden Points
+// ---------------------------------------------------------------------------
+
+const MOTIVATION_CATEGORY_VALUES = [
+  'sales',
+  'customer_smile',
+  'team_help',
+  'reliability',
+  'cleanliness_preparation',
+  'event_energy',
+  'bonus',
+  'correction',
+]
+const MOTIVATION_SOURCE_VALUES = ['manual', 'pos', 'adjustment', 'team_bonus', 'correction']
+const NOTE_REQUIRED_CATEGORIES = ['customer_smile', 'team_help', 'event_energy', 'correction']
+
+export interface MotivationCheck {
+  ok: boolean
+  message?: string
+}
+
+export function validatePointRule(input: {
+  name?: unknown
+  category?: unknown
+  pointsPerUnit?: unknown
+  bonusPoints?: unknown
+}): MotivationCheck {
+  if (typeof input.name !== 'string' || input.name.trim().length === 0) {
+    return { ok: false, message: 'Zadajte názov pravidla.' }
+  }
+  if (input.name.trim().length > 200) {
+    return { ok: false, message: 'Názov je príliš dlhý.' }
+  }
+  if (!MOTIVATION_CATEGORY_VALUES.includes(input.category as string)) {
+    return { ok: false, message: 'Neplatná kategória.' }
+  }
+  const pts = parseOptionalNumber(input.pointsPerUnit)
+  if (pts === undefined) {
+    return { ok: false, message: 'Neplatný počet bodov za jednotku.' }
+  }
+  const bonus = parseOptionalNumber(input.bonusPoints)
+  if (bonus === undefined) {
+    return { ok: false, message: 'Neplatné bonusové body.' }
+  }
+  return { ok: true }
+}
+
+/**
+ * Validates a manual point event. `allowNegative` reflects the actor's capability;
+ * when false, negative total points are rejected. Note is required for experience,
+ * team, event and correction categories (and for any negative entry).
+ */
+export function validatePointEvent(
+  input: {
+    staffUserId?: unknown
+    category?: unknown
+    source?: unknown
+    quantity?: unknown
+    pointsPerUnit?: unknown
+    note?: unknown
+    happenedAt?: unknown
+  },
+  allowNegative: boolean,
+): MotivationCheck {
+  if (typeof input.staffUserId !== 'string' || input.staffUserId.length === 0) {
+    return { ok: false, message: 'Vyberte zamestnanca.' }
+  }
+  if (!MOTIVATION_CATEGORY_VALUES.includes(input.category as string)) {
+    return { ok: false, message: 'Neplatná kategória.' }
+  }
+  if (input.source !== undefined && !MOTIVATION_SOURCE_VALUES.includes(input.source as string)) {
+    return { ok: false, message: 'Neplatný zdroj.' }
+  }
+  const qty = parseOptionalNumber(input.quantity)
+  if (qty === undefined || qty === null || qty === 0) {
+    return { ok: false, message: 'Zadajte nenulové množstvo.' }
+  }
+  const pts = parseOptionalNumber(input.pointsPerUnit)
+  if (pts === undefined || pts === null) {
+    return { ok: false, message: 'Zadajte počet bodov.' }
+  }
+  const total = qty * pts
+  if (total < 0 && !allowNegative) {
+    return { ok: false, message: 'Záporné body môžu zadávať iba majiteľ alebo administrátor.' }
+  }
+  const note = typeof input.note === 'string' ? input.note.trim() : ''
+  const needsNote = NOTE_REQUIRED_CATEGORIES.includes(input.category as string) || total < 0
+  if (needsNote && note.length === 0) {
+    return { ok: false, message: 'Pri tejto kategórii je poznámka povinná.' }
+  }
+  if (input.happenedAt !== undefined && input.happenedAt !== null && input.happenedAt !== '') {
+    const d = new Date(input.happenedAt as string)
+    if (Number.isNaN(d.getTime())) {
+      return { ok: false, message: 'Neplatný dátum udalosti.' }
+    }
+  }
+  return { ok: true }
+}
+
+export function validateBonusPeriod(input: {
+  periodStart?: unknown
+  periodEnd?: unknown
+  pointValueEur?: unknown
+  monthlyPersonalTarget?: unknown
+  monthlyTeamTarget?: unknown
+  teamBonusAmount?: unknown
+}): MotivationCheck {
+  if (!isValidDate(input.periodStart)) {
+    return { ok: false, message: 'Neplatný začiatok obdobia.' }
+  }
+  if (!isValidDate(input.periodEnd)) {
+    return { ok: false, message: 'Neplatný koniec obdobia.' }
+  }
+  if ((input.periodEnd as string) < (input.periodStart as string)) {
+    return { ok: false, message: 'Koniec obdobia musí byť po začiatku.' }
+  }
+  for (const [val, label] of [
+    [input.pointValueEur, 'hodnota bodu'],
+    [input.monthlyPersonalTarget, 'osobný cieľ'],
+    [input.monthlyTeamTarget, 'tímový cieľ'],
+    [input.teamBonusAmount, 'tímový bonus'],
+  ] as const) {
+    const parsed = parseOptionalNumber(val)
+    if (parsed === undefined) {
+      return { ok: false, message: `Neplatná hodnota: ${label}.` }
+    }
+    if (parsed !== null && parsed < 0) {
+      return { ok: false, message: `Hodnota nesmie byť záporná: ${label}.` }
+    }
+  }
+  return { ok: true }
+}
+
+export function validateMultiplier(input: {
+  staffUserId?: unknown
+  periodStart?: unknown
+  periodEnd?: unknown
+  multiplier?: unknown
+  note?: unknown
+}): MotivationCheck {
+  if (typeof input.staffUserId !== 'string' || input.staffUserId.length === 0) {
+    return { ok: false, message: 'Vyberte zamestnanca.' }
+  }
+  if (!isValidDate(input.periodStart) || !isValidDate(input.periodEnd)) {
+    return { ok: false, message: 'Neplatné obdobie.' }
+  }
+  const mult = parseOptionalNumber(input.multiplier)
+  if (mult === undefined || mult === null || mult < 0) {
+    return { ok: false, message: 'Neplatný násobiteľ.' }
+  }
+  const note = typeof input.note === 'string' ? input.note.trim() : ''
+  if (note.length === 0) {
+    return { ok: false, message: 'Pri zmene násobiteľa je poznámka povinná.' }
+  }
+  return { ok: true }
+}

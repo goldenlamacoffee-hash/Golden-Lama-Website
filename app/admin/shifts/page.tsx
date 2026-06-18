@@ -3,7 +3,7 @@ import { ensureOwnerBootstrap, getCurrentUser } from "@/lib/auth"
 import { can } from "@/lib/permissions"
 import { CalendarManager } from "@/components/admin/calendar-manager"
 
-export default async function AdminCalendarPage() {
+export default async function AdminShiftsPage() {
   await ensureOwnerBootstrap()
   const user = await getCurrentUser()
 
@@ -24,7 +24,7 @@ export default async function AdminCalendarPage() {
 
   return (
     <CalendarManager
-      mode="absence"
+      mode="shift"
       currentUser={{ id: user.id, name: user.name, email: user.email }}
       canReadAll
       canWrite={can(user.role, "calendar:write")}

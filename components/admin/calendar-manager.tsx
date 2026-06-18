@@ -89,16 +89,58 @@ interface StaffOption {
   role: string
 }
 
+/** Which entry types this planner manages: real work shifts vs. absences. */
+export type CalendarMode = "shift" | "absence"
+
 interface CalendarManagerProps {
   currentUser: { id: string; name: string; email: string }
   canWrite: boolean
   canDelete: boolean
   canReadAll: boolean
+  /**
+   * Page mode. "shift" → only work shifts; "absence" → vacation/sick/etc.
+   * For the personal view this is the initial tab.
+   */
+  mode?: CalendarMode
   /** Page title and whether this is the personal "my shifts" view. */
   personalView?: boolean
 }
 
 type ViewMode = "month" | "week" | "list"
+
+const WORK_SHIFT_TYPES: EntryType[] = ["work_shift"]
+const ABSENCE_TYPES: EntryType[] = ["vacation", "sick_leave", "unavailable", "training", "other"]
+
+function typesForMode(mode: CalendarMode): EntryType[] {
+  return mode === "shift" ? WORK_SHIFT_TYPES : ABSENCE_TYPES
+}
+
+/** Slovak labels for each mode, used for titles, buttons and dialog copy. */
+const MODE_COPY: Record<CalendarMode, {
+  title: string
+  subtitle: string
+  addButton: string
+  newDialog: string
+  editDialog: string
+  dialogDescription: string
+}> = {
+  shift: {
+    title: "Zmeny",
+    subtitle: "Plánovanie pracovných zmien, pozícií a prevádzok",
+    addButton: "Nová zmena",
+    newDialog: "Nová zmena",
+    editDialog: "Upraviť zmenu",
+    dialogDescription: "Naplánujte pracovnú zmenu, pozíciu a prevádzku.",
+  },
+  absence: {
+    title: "Neprítomnosti",
+    subtitle: "Dovolenky, PN, nedostupnosť a školenia",
+    addButton: "Nová neprítomnosť",
+    newDialog: "Nová neprítomnosť",
+    editDialog: "Upraviť neprítomnosť",
+    dialogDescription: "Zaznamenajte dovolenku, PN, nedostupnosť alebo školenie.",
+  },
+}
 
 const statusMeta: Record<ShiftStatus, { label: string; className: string }> = {
   draft: { label: "Koncept", className: "bg-[#4a3526] text-[#F5E3C2]" },
@@ -118,8 +160,6 @@ const typeMeta: Record<
   unavailable: { label: "Nedostupný", short: "Nedostupný", block: "bg-[#5a4636] text-[#F5E3C2]", dot: "bg-[#5a4636]", timed: false },
   other: { label: "Iné", short: "Iné", block: "bg-[#4a3526] text-[#F5E3C2]", dot: "bg-[#4a3526]", timed: false },
 }
-
-const ENTRY_TYPE_ORDER: EntryType[] = ["work_shift", "training", "vacation", "sick_leave", "unavailable", "other"]
 
 const SK_DAYS = ["Po", "Ut", "St", "Št", "Pi", "So", "Ne"]
 const SK_MONTHS = [
@@ -201,9 +241,18 @@ export function CalendarManager({
   canWrite,
   canDelete,
   canReadAll,
+  mode = "shift",
   personalView = false,
 }: CalendarManagerProps) {
   const router = useRouter()
+
+  // In the personal view the user switches between shifts and absences via tabs;
+  // elsewhere the mode is fixed by the page.
+  const [personalTab, setPersonalTab] = useState<CalendarMode>(mode)
+  const effectiveMode: CalendarMode = personalView ? personalTab : mode
+  const isShiftMode = effectiveMode === "shift"
+  const allowedTypes = typesForMode(effectiveMode)
+  const copy = MODE_COPY[effectiveMode]
   const [shifts, setShifts] = useState<ShiftDto[]>([])
   const [staff, setStaff] = useState<StaffOption[]>([])
   const [loading, setLoading] = useState(true)
@@ -252,10 +301,12 @@ export function CalendarManager({
     const params = new URLSearchParams({
       from: toDateKey(range.from),
       to: toDateKey(range.to),
+      mode: effectiveMode,
     })
     if (canReadAll && staffFilter !== "all") params.set("staff", staffFilter)
     if (canReadAll && statusFilter !== "all") params.set("status", statusFilter)
-    if (typeFilter !== "all") params.set("type", typeFilter)
+    // The type filter only applies within the absence calendar (shift mode is single-type).
+    if (!isShiftMode && typeFilter !== "all") params.set("type", typeFilter)
     try {
       const res = await fetch(`/api/admin/shifts?${params.toString()}`)
       if (!res.ok) {
@@ -270,7 +321,7 @@ export function CalendarManager({
     } finally {
       setLoading(false)
     }
-  }, [range.from, range.to, staffFilter, statusFilter, typeFilter, canReadAll])
+  }, [range.from, range.to, staffFilter, statusFilter, typeFilter, canReadAll, effectiveMode, isShiftMode])
 
   useEffect(() => {
     loadShifts()
@@ -324,7 +375,17 @@ export function CalendarManager({
   const openCreate = (dateKey?: string) => {
     setEditing(null)
     const d = dateKey ?? toDateKey(new Date())
-    setForm({ ...EMPTY_FORM, startDate: d, endDate: d, staffUserId: staff[0]?.id ?? "" })
+    // Defaults depend on the page mode: work shifts are timed single-day entries,
+    // absences default to an all-day vacation.
+    const entryType: EntryType = isShiftMode ? "work_shift" : "vacation"
+    setForm({
+      ...EMPTY_FORM,
+      entryType,
+      allDay: isShiftMode ? false : true,
+      startDate: d,
+      endDate: d,
+      staffUserId: staff[0]?.id ?? "",
+    })
     setOverlapWarning([])
     setError("")
     setFormOpen(true)
@@ -350,12 +411,13 @@ export function CalendarManager({
     setFormOpen(true)
   }
 
-  // Keep endDate >= startDate as the user edits the start.
+  // Keep endDate >= startDate as the user edits the start. Work shifts are always
+  // single-day, so the end date tracks the start exactly.
   const onStartDateChange = (value: string) => {
     setForm((f) => ({
       ...f,
       startDate: value,
-      endDate: f.endDate && f.endDate >= value ? f.endDate : value,
+      endDate: isShiftMode ? value : f.endDate && f.endDate >= value ? f.endDate : value,
     }))
   }
 
@@ -365,14 +427,18 @@ export function CalendarManager({
     try {
       const url = editing ? `/api/admin/shifts/${editing.id}` : "/api/admin/shifts"
       const method = editing ? "PATCH" : "POST"
+      // Work shifts are always timed and single-day; normalise before sending.
+      const allDay = isShiftMode ? false : form.allDay
+      const endDate = isShiftMode ? form.startDate : form.endDate
       const payload = {
+        mode: effectiveMode,
         staffUserId: form.staffUserId,
         entryType: form.entryType,
-        allDay: form.allDay,
+        allDay,
         startDate: form.startDate,
-        endDate: form.endDate,
-        startTime: form.allDay ? null : form.startTime,
-        endTime: form.allDay ? null : form.endTime,
+        endDate,
+        startTime: allDay ? null : form.startTime,
+        endTime: allDay ? null : form.endTime,
         location: form.location,
         position: form.position,
         notes: form.notes,
@@ -462,9 +528,14 @@ export function CalendarManager({
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image src="/logo.png" alt="Golden Lama Coffee" width={40} height={40} className="rounded-full" />
-            <h1 className="font-heading text-xl text-[#F5E3C2]">
-              {personalView ? "Moje zmeny" : "Pracovný kalendár"}
-            </h1>
+            <div>
+              <h1 className="font-heading text-xl text-[#F5E3C2] leading-tight">
+                {personalView ? "Môj rozpis" : copy.title}
+              </h1>
+              <p className="text-xs text-[#8C6F4E]">
+                {personalView ? "Vaše zmeny a neprítomnosti" : copy.subtitle}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-4">
             <a href="/admin" className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1">
@@ -485,6 +556,30 @@ export function CalendarManager({
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-8">
+        {/* Personal view: switch between own shifts and own absences */}
+        {personalView && (
+          <div className="mb-6 flex rounded-md border border-[#8C6F4E]/50 overflow-hidden w-fit">
+            <button
+              onClick={() => {
+                setPersonalTab("shift")
+                setTypeFilter("all")
+              }}
+              className={`px-4 py-1.5 text-sm ${personalTab === "shift" ? "bg-[#E09E14] text-[#28170F]" : "text-[#F5E3C2] hover:bg-[#8C6F4E]/20"}`}
+            >
+              Moje zmeny
+            </button>
+            <button
+              onClick={() => {
+                setPersonalTab("absence")
+                setTypeFilter("all")
+              }}
+              className={`px-4 py-1.5 text-sm ${personalTab === "absence" ? "bg-[#E09E14] text-[#28170F]" : "text-[#F5E3C2] hover:bg-[#8C6F4E]/20"}`}
+            >
+              Moje neprítomnosti
+            </button>
+          </div>
+        )}
+
         {/* Toolbar */}
         <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div className="flex items-center gap-2">
@@ -539,19 +634,22 @@ export function CalendarManager({
               </button>
             </div>
 
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[160px] bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
-                <SelectValue placeholder="Typ" />
-              </SelectTrigger>
-              <SelectContent className="bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
-                <SelectItem value="all">Všetky typy</SelectItem>
-                {ENTRY_TYPE_ORDER.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {typeMeta[t].label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {/* Work shifts are a single type, so the type filter only appears for absences. */}
+            {!isShiftMode && (
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[160px] bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                  <SelectValue placeholder="Typ" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                  <SelectItem value="all">Všetky typy</SelectItem>
+                  {allowedTypes.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {typeMeta[t].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
             {canReadAll && (
               <>
@@ -585,21 +683,23 @@ export function CalendarManager({
             {canWrite && (
               <Button onClick={() => openCreate()} className="bg-[#E09E14] hover:bg-[#c88a10] text-[#28170F]">
                 <Plus className="h-4 w-4 mr-2" />
-                Nový záznam
+                {copy.addButton}
               </Button>
             )}
           </div>
         </div>
 
-        {/* Legend */}
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4">
-          {ENTRY_TYPE_ORDER.map((t) => (
-            <div key={t} className="flex items-center gap-1.5 text-xs text-[#8C6F4E]">
-              <span className={`inline-block h-2.5 w-2.5 rounded-sm ${typeMeta[t].dot}`} />
-              {typeMeta[t].label}
-            </div>
-          ))}
-        </div>
+        {/* Legend — only meaningful for the multi-type absence calendar */}
+        {!isShiftMode && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-4">
+            {allowedTypes.map((t) => (
+              <div key={t} className="flex items-center gap-1.5 text-xs text-[#8C6F4E]">
+                <span className={`inline-block h-2.5 w-2.5 rounded-sm ${typeMeta[t].dot}`} />
+                {typeMeta[t].label}
+              </div>
+            ))}
+          </div>
+        )}
 
         {overlapWarning.length > 0 && (
           <div className="mb-4 flex items-start gap-2 rounded-md border border-[#E09E14]/50 bg-[#E09E14]/10 px-4 py-3 text-sm text-[#F5E3C2]">
@@ -656,10 +756,10 @@ export function CalendarManager({
         <DialogContent className="bg-[#3a251a] border-[#8C6F4E]/30 text-[#F5E3C2] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-[#F5E3C2]">
-              {editing ? "Upraviť záznam" : "Nový záznam"}
+              {editing ? copy.editDialog : copy.newDialog}
             </DialogTitle>
             <DialogDescription className="text-[#8C6F4E]">
-              {editing ? "Upravte detaily záznamu v kalendári." : "Naplánujte zmenu, dovolenku alebo inú neprítomnosť."}
+              {copy.dialogDescription}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -679,35 +779,38 @@ export function CalendarManager({
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-[#F5E3C2]">Typ záznamu</Label>
-              <Select
-                value={form.entryType}
-                onValueChange={(v) =>
-                  setForm((f) => {
-                    const next = v as EntryType
-                    // Non-work types default to all-day for convenience.
-                    const allDay = typeMeta[next].timed ? f.allDay : true
-                    return { ...f, entryType: next, allDay }
-                  })
-                }
-              >
-                <SelectTrigger className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
-                  {ENTRY_TYPE_ORDER.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {typeMeta[t].label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
+            {/* Work shifts are always work_shift; the type selector is for absences only. */}
+            {!isShiftMode && (
               <div className="space-y-2">
-                <Label className="text-[#F5E3C2]">Dátum od</Label>
+                <Label className="text-[#F5E3C2]">Typ neprítomnosti</Label>
+                <Select
+                  value={form.entryType}
+                  onValueChange={(v) =>
+                    setForm((f) => {
+                      const next = v as EntryType
+                      // Non-work types default to all-day for convenience.
+                      const allDay = typeMeta[next].timed ? f.allDay : true
+                      return { ...f, entryType: next, allDay }
+                    })
+                  }
+                >
+                  <SelectTrigger className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#3a251a] border-[#8C6F4E]/50 text-[#F5E3C2]">
+                    {ABSENCE_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {typeMeta[t].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            <div className={isShiftMode ? "" : "grid grid-cols-2 gap-3"}>
+              <div className="space-y-2">
+                <Label className="text-[#F5E3C2]">{isShiftMode ? "Dátum" : "Dátum od"}</Label>
                 <Input
                   type="date"
                   value={form.startDate}
@@ -715,28 +818,34 @@ export function CalendarManager({
                   className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
                 />
               </div>
-              <div className="space-y-2">
-                <Label className="text-[#F5E3C2]">Dátum do</Label>
-                <Input
-                  type="date"
-                  value={form.endDate}
-                  min={form.startDate || undefined}
-                  onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
-              </div>
+              {/* Multi-day range only applies to absences; work shifts are single-day. */}
+              {!isShiftMode && (
+                <div className="space-y-2">
+                  <Label className="text-[#F5E3C2]">Dátum do</Label>
+                  <Input
+                    type="date"
+                    value={form.endDate}
+                    min={form.startDate || undefined}
+                    onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                    className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
+                  />
+                </div>
+              )}
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
-              <Checkbox
-                checked={form.allDay}
-                onCheckedChange={(c) => setForm((f) => ({ ...f, allDay: c === true }))}
-                className="border-[#8C6F4E]/60 data-[state=checked]:bg-[#E09E14] data-[state=checked]:border-[#E09E14] data-[state=checked]:text-[#28170F]"
-              />
-              <span className="text-sm text-[#F5E3C2]">Celodenný záznam (bez konkrétneho času)</span>
-            </label>
+            {/* Work shifts always have times; the all-day toggle is for absences. */}
+            {!isShiftMode && (
+              <label className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={form.allDay}
+                  onCheckedChange={(c) => setForm((f) => ({ ...f, allDay: c === true }))}
+                  className="border-[#8C6F4E]/60 data-[state=checked]:bg-[#E09E14] data-[state=checked]:border-[#E09E14] data-[state=checked]:text-[#28170F]"
+                />
+                <span className="text-sm text-[#F5E3C2]">Celodenný záznam (bez konkrétneho času)</span>
+              </label>
+            )}
 
-            {!form.allDay && (
+            {(isShiftMode || !form.allDay) && (
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label className="text-[#F5E3C2]">Začiatok</Label>
@@ -759,26 +868,29 @@ export function CalendarManager({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label className="text-[#F5E3C2]">Prevádzka</Label>
-                <Input
-                  value={form.location}
-                  onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
-                  placeholder="napr. Hlavná pobočka"
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
+            {/* Prevádzka & pozícia are relevant for work shifts only. */}
+            {isShiftMode && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="text-[#F5E3C2]">Prevádzka</Label>
+                  <Input
+                    value={form.location}
+                    onChange={(e) => setForm((f) => ({ ...f, location: e.target.value }))}
+                    placeholder="napr. Hlavná pobočka"
+                    className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[#F5E3C2]">Pozícia</Label>
+                  <Input
+                    value={form.position}
+                    onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
+                    placeholder="napr. Barista"
+                    className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label className="text-[#F5E3C2]">Pozícia</Label>
-                <Input
-                  value={form.position}
-                  onChange={(e) => setForm((f) => ({ ...f, position: e.target.value }))}
-                  placeholder="napr. Barista"
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
-              </div>
-            </div>
+            )}
             <div className="space-y-2">
               <Label className="text-[#F5E3C2]">Poznámka</Label>
               <Textarea

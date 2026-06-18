@@ -18,6 +18,19 @@ export function isWorkLike(type: EntryType): boolean {
   return type === 'work_shift' || type === 'training'
 }
 
+/** Entry types shown on the dedicated work-shift planner (/admin/shifts). */
+export const WORK_SHIFT_TYPES: EntryType[] = ['work_shift']
+
+/** Entry types shown on the absence/unavailability calendar (/admin/calendar). */
+export const ABSENCE_TYPES: EntryType[] = ['vacation', 'sick_leave', 'unavailable', 'training', 'other']
+
+export type CalendarMode = 'shift' | 'absence'
+
+/** Resolves the allowed entry types for a given page mode. */
+export function entryTypesForMode(mode: CalendarMode): EntryType[] {
+  return mode === 'shift' ? WORK_SHIFT_TYPES : ABSENCE_TYPES
+}
+
 export interface WorkShift {
   id: string
   staffUserId: string
@@ -99,6 +112,8 @@ export interface ShiftFilters {
   staffUserId?: string
   status?: ShiftStatus
   entryType?: EntryType
+  /** Restricts results to this set of entry types (used to separate shifts vs. absences). */
+  entryTypes?: EntryType[]
   /** When set, restricts results to this single staff member (used for read_own scope). */
   onlyStaffUserId?: string
   /** When true, exclude draft shifts (staff should only see published/cancelled). */
@@ -134,6 +149,10 @@ export async function listShifts(filters: ShiftFilters): Promise<WorkShift[]> {
   if (filters.entryType) {
     params.push(filters.entryType)
     clauses.push(`s.entry_type = $${params.length}`)
+  }
+  if (filters.entryTypes && filters.entryTypes.length > 0) {
+    params.push(filters.entryTypes)
+    clauses.push(`s.entry_type = ANY($${params.length})`)
   }
   if (filters.publishedOnly) {
     clauses.push(`s.status <> 'draft'`)

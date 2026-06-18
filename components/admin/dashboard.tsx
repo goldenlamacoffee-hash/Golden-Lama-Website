@@ -13,7 +13,7 @@ import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
 import type { AdminRole } from "@/lib/permissions"
 import { ROLE_LABELS } from "@/lib/permissions"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, ExternalLink, Smartphone, Package, Trophy, Sparkles } from "lucide-react"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, CalendarClock, CalendarOff, ExternalLink, Smartphone, Package, Trophy, Sparkles } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
@@ -72,20 +72,29 @@ export function AdminDashboard({
           </div>
           <div className="flex items-center gap-4">
             {canViewCalendar ? (
-              <a
-                href="/admin/calendar"
-                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
-              >
-                <CalendarDays className="h-4 w-4" />
-                Kalendár
-              </a>
+              <>
+                <a
+                  href="/admin/shifts"
+                  className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+                >
+                  <CalendarClock className="h-4 w-4" />
+                  Zmeny
+                </a>
+                <a
+                  href="/admin/calendar"
+                  className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+                >
+                  <CalendarOff className="h-4 w-4" />
+                  Neprítomnosti
+                </a>
+              </>
             ) : canViewOwnShifts ? (
               <a
                 href="/admin/my-shifts"
                 className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
               >
                 <CalendarDays className="h-4 w-4" />
-                Moje zmeny
+                Môj rozpis
               </a>
             ) : null}
             {canViewInventory && (
@@ -164,6 +173,63 @@ export function AdminDashboard({
               <a href={appAdminUrl} target="_blank" rel="noopener noreferrer">
                 Otvoriť App Admin
                 <ExternalLink className="h-4 w-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
+        {canViewCalendar && (
+          <div className="mb-6 grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                  <CalendarClock className="h-5 w-5 text-[#E09E14]" />
+                </div>
+                <div>
+                  <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Zmeny</h2>
+                  <p className="text-sm text-[#8C6F4E]">Plánovanie pracovných zmien</p>
+                </div>
+              </div>
+              <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 w-full">
+                <a href="/admin/shifts">
+                  Otvoriť zmeny
+                  <CalendarClock className="h-4 w-4 ml-2" />
+                </a>
+              </Button>
+            </div>
+            <div className="flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                  <CalendarOff className="h-5 w-5 text-[#E09E14]" />
+                </div>
+                <div>
+                  <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Neprítomnosti</h2>
+                  <p className="text-sm text-[#8C6F4E]">Dovolenky, PN a dostupnosť tímu</p>
+                </div>
+              </div>
+              <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 w-full">
+                <a href="/admin/calendar">
+                  Otvoriť neprítomnosti
+                  <CalendarOff className="h-4 w-4 ml-2" />
+                </a>
+              </Button>
+            </div>
+          </div>
+        )}
+        {canViewOwnShifts && !canViewCalendar && (
+          <div className="mb-6 flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                <CalendarDays className="h-5 w-5 text-[#E09E14]" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Môj rozpis</h2>
+                <p className="text-sm text-[#8C6F4E]">Tvoje zmeny a neprítomnosti</p>
+              </div>
+            </div>
+            <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 shrink-0">
+              <a href="/admin/my-shifts">
+                Zobraziť rozpis
+                <CalendarDays className="h-4 w-4 ml-2" />
               </a>
             </Button>
           </div>

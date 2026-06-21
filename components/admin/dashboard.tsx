@@ -134,6 +134,15 @@ export function AdminDashboard({
                 Používatelia
               </a>
             )}
+            {canViewReports && (
+              <a
+                href="/admin/reports"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                Reporty
+              </a>
+            )}
             <a 
               href="/" 
               target="_blank" 
@@ -289,6 +298,25 @@ export function AdminDashboard({
               <a href="/admin/my-points">
                 Zobraziť moje body
                 <Sparkles className="h-4 w-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
+        {canViewReports && (
+          <div className="mb-6 flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                <FileSpreadsheet className="h-5 w-5 text-[#E09E14]" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">Reporty a exporty</h2>
+                <p className="text-sm text-[#8C6F4E]">Stiahnite si zmeny, neprítomnosti, sklad a body do Excelu</p>
+              </div>
+            </div>
+            <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 shrink-0">
+              <a href="/admin/reports">
+                Otvoriť reporty
+                <FileSpreadsheet className="h-4 w-4 ml-2" />
               </a>
             </Button>
           </div>

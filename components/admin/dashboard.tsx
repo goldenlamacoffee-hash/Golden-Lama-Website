@@ -13,7 +13,7 @@ import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
 import type { AdminRole } from "@/lib/permissions"
 import { ROLE_LABELS } from "@/lib/permissions"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, CalendarClock, CalendarOff, ExternalLink, Smartphone, Package, Trophy, Sparkles } from "lucide-react"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, CalendarClock, CalendarOff, ExternalLink, Smartphone, Package, Trophy, Sparkles, FileSpreadsheet } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
@@ -25,6 +25,7 @@ interface AdminDashboardProps {
   canViewInventory: boolean
   canViewMotivation: boolean
   canViewOwnPoints: boolean
+  canViewReports: boolean
   canViewAppAdmin: boolean
   appAdminUrl: string
 }
@@ -39,6 +40,7 @@ export function AdminDashboard({
   canViewInventory,
   canViewMotivation,
   canViewOwnPoints,
+  canViewReports,
   canViewAppAdmin,
   appAdminUrl,
 }: AdminDashboardProps) {

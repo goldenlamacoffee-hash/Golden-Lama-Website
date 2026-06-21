@@ -32,6 +32,13 @@ export type Capability =
   | 'motivation:write_negative' // add negative / correction point events
   | 'motivation:manage_rules' // create / edit point rules
   | 'motivation:manage_settings' // bonus periods, point value, quality multipliers
+  // Reports / exports
+  | 'reports:view' // open the reports/export page
+  | 'reports:shifts' // export staff shifts / worked hours
+  | 'reports:absences' // export absences
+  | 'reports:inventory' // export inventory movements
+  | 'reports:points' // export Golden Points (sensitive bonus/payroll)
+  | 'reports:users' // export user list
 
 const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
   owner: [
@@ -53,6 +60,12 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'motivation:write_negative',
     'motivation:manage_rules',
     'motivation:manage_settings',
+    'reports:view',
+    'reports:shifts',
+    'reports:absences',
+    'reports:inventory',
+    'reports:points',
+    'reports:users',
   ],
   admin: [
     'cms:read',
@@ -73,6 +86,12 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'motivation:write_negative',
     'motivation:manage_rules',
     'motivation:manage_settings',
+    'reports:view',
+    'reports:shifts',
+    'reports:absences',
+    'reports:inventory',
+    'reports:points',
+    'reports:users',
   ],
   manager: [
     'cms:read',
@@ -86,6 +105,10 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'motivation:read_all',
     'motivation:read_own',
     'motivation:write',
+    'reports:view',
+    'reports:shifts',
+    'reports:absences',
+    'reports:inventory',
   ],
   content_editor: ['cms:read', 'cms:write'],
   staff: ['cms:read', 'calendar:read_own', 'motivation:read_own'],

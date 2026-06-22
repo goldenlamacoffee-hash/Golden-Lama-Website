@@ -15,22 +15,25 @@ interface GalleryProps {
 export function Gallery({ gallery, section }: GalleryProps) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null)
 
+  // Only images that have a source and are not hidden render publicly.
+  const images = (gallery || []).filter((img) => img?.src && img.visible !== false)
+
   const openLightbox = (index: number) => setSelectedImage(index)
   const closeLightbox = () => setSelectedImage(null)
 
   const goToPrevious = () => {
     if (selectedImage === null) return
-    setSelectedImage(selectedImage === 0 ? gallery.length - 1 : selectedImage - 1)
+    setSelectedImage(selectedImage === 0 ? images.length - 1 : selectedImage - 1)
   }
 
   const goToNext = () => {
     if (selectedImage === null) return
-    setSelectedImage(selectedImage === gallery.length - 1 ? 0 : selectedImage + 1)
+    setSelectedImage(selectedImage === images.length - 1 ? 0 : selectedImage + 1)
   }
 
-  // Hide when explicitly disabled, or when there are no images to show.
+  // Hide when explicitly disabled, or when there are no visible images to show.
   if (section?.visible === false) return null
-  if (!gallery || gallery.length === 0) return null
+  if (images.length === 0) return null
 
   return (
     <section id="gallery" className="py-24 bg-[#F5E3C2]">
@@ -46,7 +49,7 @@ export function Gallery({ gallery, section }: GalleryProps) {
 
         {/* Gallery Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-16">
-          {gallery.map((image, index) => (
+          {images.map((image, index) => (
             <Reveal key={`gallery-${index}`} delay={(index % 4) * 80}>
               <button
                 onClick={() => openLightbox(index)}
@@ -98,8 +101,8 @@ export function Gallery({ gallery, section }: GalleryProps) {
 
             <div className="relative w-full max-w-4xl h-[70vh] mx-4" onClick={(e) => e.stopPropagation()}>
               <Image
-                src={gallery[selectedImage].src}
-                alt={gallery[selectedImage].alt}
+                src={images[selectedImage].src || "/placeholder.svg"}
+                alt={images[selectedImage].alt}
                 fill
                 className="object-contain"
                 unoptimized

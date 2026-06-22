@@ -80,9 +80,10 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     }
 
     // Remove the binary from Blob first (best effort), then the metadata row.
-    if (isBlobConfigured()) {
+    // Private blobs are deleted by pathname (asset.url is our delivery route).
+    if (isBlobConfigured() && asset.pathname) {
       try {
-        await del(asset.url)
+        await del(asset.pathname)
       } catch (err) {
         console.error('[media] blob delete failed (continuing):', err)
       }

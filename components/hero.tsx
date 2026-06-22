@@ -20,13 +20,17 @@ export function Hero({ content }: HeroProps) {
   const showSecondary = hero.showSecondaryCta !== false
   const showCtaRow = showPrimary || showSecondary
 
+  // Background image comes from the CMS/media library; empty = safe default.
+  const heroImage = hero.imageSrc?.trim() || "/images/hero-bike.jpg"
+  const heroImageAlt = hero.imageAlt?.trim() || "Golden Lama Coffee Bike"
+
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-24 pb-16 overflow-hidden">
       {/* Background Image */}
       <div className="absolute inset-0">
         <Image
-          src="/images/hero-bike.jpg"
-          alt="Golden Lama Coffee Bike"
+          src={heroImage || "/placeholder.svg"}
+          alt={heroImageAlt}
           fill
           className="object-cover"
           priority

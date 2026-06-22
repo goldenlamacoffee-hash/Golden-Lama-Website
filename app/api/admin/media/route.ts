@@ -70,14 +70,20 @@ export async function POST(request: Request) {
 
   try {
     const pathname = safeBlobPathname(file.name)
+    // The connected Blob store is private, so uploads use private access and a
+    // random suffix (keeps pathnames unique => immutable, cacheable delivery).
     const blob = await put(pathname, file, {
-      access: 'public',
+      access: 'private',
       contentType: file.type,
-      addRandomSuffix: false,
+      addRandomSuffix: true,
     })
 
+    // Private blobs are served to the public site through our own delivery
+    // route (the raw blob.url is not publicly accessible).
+    const deliveryUrl = `/api/media/file?pathname=${encodeURIComponent(blob.pathname)}`
+
     const asset = await insertMedia({
-      url: blob.url,
+      url: deliveryUrl,
       pathname: blob.pathname,
       filename: pathname.split('/').pop() ?? null,
       originalFilename: file.name,

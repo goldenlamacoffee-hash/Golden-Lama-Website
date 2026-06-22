@@ -2,6 +2,8 @@ export interface GalleryImage {
   src: string
   alt: string
   caption?: string
+  /** When false, the image is hidden on the public site. Undefined/true = visible. */
+  visible?: boolean
 }
 
 export interface MenuItem {
@@ -34,6 +36,9 @@ export interface PageContent {
     /** When false, the matching CTA button is hidden even if text/link exist. Defaults to shown. */
     showPrimaryCta?: boolean
     showSecondaryCta?: boolean
+    /** Background image. Empty = safe default hero image. */
+    imageSrc?: string
+    imageAlt?: string
   }
   about: {
     title: string

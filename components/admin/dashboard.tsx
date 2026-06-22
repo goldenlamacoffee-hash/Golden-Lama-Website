@@ -125,6 +125,15 @@ export function AdminDashboard({
                 Moje body
               </a>
             ) : null}
+            {canEdit && (
+              <a
+                href="/admin/media"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <ImageIcon className="h-4 w-4" />
+                Médiá
+              </a>
+            )}
             {canManageUsers && (
               <a
                 href="/admin/users"

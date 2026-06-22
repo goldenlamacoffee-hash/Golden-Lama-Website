@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { RichTextEditor } from "@/components/admin/rich-text-editor"
+import { MediaPicker } from "@/components/admin/media-picker"
 import { plainTextToHtml } from "@/lib/rich-text"
 import type { PageContent } from "@/lib/types"
 import {
@@ -130,7 +131,6 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
     check("events.ctaLink", content.events?.ctaLink)
     check("app.iosLink", content.app?.iosLink)
     check("app.androidLink", content.app?.androidLink)
-    check("app.imageSrc", content.app?.imageSrc)
     check("contact.facebook", content.contact?.facebook)
     check("contact.tiktok", content.contact?.tiktok)
     check("locationsSection.mapUrl", content.locationsSection?.mapUrl)
@@ -294,6 +294,18 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
               <Field label="Popis">
                 <Textarea value={content.hero?.description || ""} onChange={(e) => setHero("description", e.target.value)} className={inputClass} rows={3} />
               </Field>
+
+              <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-3">
+                <p className="text-sm font-medium text-[#F5E3C2]">Obrázok pozadia</p>
+                <MediaPicker
+                  value={content.hero?.imageSrc || ""}
+                  onChange={(url) => setHero("imageSrc", url)}
+                  alt={content.hero?.imageAlt || ""}
+                  onAltChange={(a) => setHero("imageAlt", a)}
+                  fallbackSrc="/images/hero-bike.jpg"
+                />
+                <p className="text-xs text-[#8C6F4E]">Prázdne = predvolený obrázok kávového bicykla.</p>
+              </div>
 
               <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-4">
                 <div className="flex items-center justify-between">
@@ -484,21 +496,16 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
                 </div>
                 {content.app?.showImage !== false && (
                   <>
-                    <Field
-                      label="Cesta k obrázku"
-                      hint="Prázdne = predvolený obrázok aplikácie."
-                      error={linkErrors["app.imageSrc"] ? "Neplatná cesta" : undefined}
-                    >
-                      <Input value={content.app?.imageSrc || ""} onChange={(e) => setSection("app", "imageSrc", e.target.value)} className={inputClass} placeholder="/images/app-preview.png" />
+                    <MediaPicker
+                      value={content.app?.imageSrc || ""}
+                      onChange={(url) => setSection("app", "imageSrc", url)}
+                      alt={content.app?.imageAlt || ""}
+                      onAltChange={(a) => setSection("app", "imageAlt", a)}
+                      fallbackSrc="/images/app-preview.png"
+                    />
+                    <Field label="Popisok pod obrázkom" hint="Voliteľné.">
+                      <Input value={content.app?.imageCaption || ""} onChange={(e) => setSection("app", "imageCaption", e.target.value)} className={inputClass} />
                     </Field>
-                    <div className="grid sm:grid-cols-2 gap-3">
-                      <Field label="Alt text" hint="Popis obrázku pre prístupnosť.">
-                        <Input value={content.app?.imageAlt || ""} onChange={(e) => setSection("app", "imageAlt", e.target.value)} className={inputClass} placeholder="Golden Lama aplikácia" />
-                      </Field>
-                      <Field label="Popisok pod obrázkom" hint="Voliteľné.">
-                        <Input value={content.app?.imageCaption || ""} onChange={(e) => setSection("app", "imageCaption", e.target.value)} className={inputClass} />
-                      </Field>
-                    </div>
                   </>
                 )}
               </div>

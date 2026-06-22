@@ -118,17 +118,6 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
       [key]: { ...((content[key] as Record<string, unknown>) || {}), [field]: value },
     })
 
-  const updateParagraph = (index: number, value: string) => {
-    const next = [...(content.about?.paragraphs || [])]
-    next[index] = value
-    setAbout("paragraphs", next)
-  }
-  const addParagraph = () => setAbout("paragraphs", [...(content.about?.paragraphs || []), ""])
-  const removeParagraph = (index: number) => {
-    const next = [...(content.about?.paragraphs || [])]
-    next.splice(index, 1)
-    setAbout("paragraphs", next)
-  }
 
   // ---- validation ----
   const linkErrors = useMemo(() => {
@@ -477,9 +466,42 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
               <Field label="Nadpis">
                 <Input value={content.app?.title || ""} onChange={(e) => setSection("app", "title", e.target.value)} className={inputClass} placeholder="Stiahnite si našu aplikáciu" />
               </Field>
-              <Field label="Popis">
-                <Textarea value={content.app?.description || ""} onChange={(e) => setSection("app", "description", e.target.value)} className={inputClass} rows={3} />
+              <Field label="Popis" hint="Formátovaný text. Prázdne = bezpečný predvolený text.">
+                <RichTextEditor
+                  value={content.app?.description}
+                  onChange={(html) => setSection("app", "description", html)}
+                  placeholder="Popíšte vernostný program…"
+                />
               </Field>
+
+              <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-[#F5E3C2]">Obrázok aplikácie</p>
+                  <label className="flex items-center gap-2 text-sm text-[#F5E3C2]/80">
+                    <Switch checked={content.app?.showImage !== false} onCheckedChange={(v) => setSection("app", "showImage", v)} />
+                    {content.app?.showImage !== false ? "Zobrazené" : "Skryté"}
+                  </label>
+                </div>
+                {content.app?.showImage !== false && (
+                  <>
+                    <Field
+                      label="Cesta k obrázku"
+                      hint="Prázdne = predvolený obrázok aplikácie."
+                      error={linkErrors["app.imageSrc"] ? "Neplatná cesta" : undefined}
+                    >
+                      <Input value={content.app?.imageSrc || ""} onChange={(e) => setSection("app", "imageSrc", e.target.value)} className={inputClass} placeholder="/images/app-preview.png" />
+                    </Field>
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      <Field label="Alt text" hint="Popis obrázku pre prístupnosť.">
+                        <Input value={content.app?.imageAlt || ""} onChange={(e) => setSection("app", "imageAlt", e.target.value)} className={inputClass} placeholder="Golden Lama aplikácia" />
+                      </Field>
+                      <Field label="Popisok pod obrázkom" hint="Voliteľné.">
+                        <Input value={content.app?.imageCaption || ""} onChange={(e) => setSection("app", "imageCaption", e.target.value)} className={inputClass} />
+                      </Field>
+                    </div>
+                  </>
+                )}
+              </div>
 
               <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-3">
                 <p className="text-sm font-medium text-[#F5E3C2]">App Store (iOS)</p>
@@ -523,8 +545,12 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
                   <Input value={content.contact?.title || ""} onChange={(e) => setContact("title", e.target.value)} className={inputClass} placeholder="Spojte sa s nami" />
                 </Field>
               </div>
-              <Field label="Popis">
-                <Textarea value={content.contact?.subtitle || ""} onChange={(e) => setContact("subtitle", e.target.value)} className={inputClass} rows={2} />
+              <Field label="Popis" hint="Formátovaný text. Prázdne = bezpečný predvolený text.">
+                <RichTextEditor
+                  value={content.contact?.subtitle}
+                  onChange={(html) => setContact("subtitle", html)}
+                  placeholder="Krátka výzva ku kontaktu…"
+                />
               </Field>
               <div className="grid sm:grid-cols-3 gap-3">
                 <Field label="Email">
@@ -565,8 +591,12 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
               <Field label="Slogan (zlatý text)">
                 <Input value={content.footer?.tagline || ""} onChange={(e) => setSection("footer", "tagline", e.target.value)} className={inputClass} placeholder="Be Golden" />
               </Field>
-              <Field label="Text pätičky">
-                <Textarea value={content.footer?.text || ""} onChange={(e) => setSection("footer", "text", e.target.value)} className={inputClass} rows={3} />
+              <Field label="Text pätičky" hint="Formátovaný text. Prázdne = bezpečný predvolený text.">
+                <RichTextEditor
+                  value={content.footer?.text}
+                  onChange={(html) => setSection("footer", "text", html)}
+                  placeholder="Krátky popis značky…"
+                />
               </Field>
             </SectionShell>
           )}

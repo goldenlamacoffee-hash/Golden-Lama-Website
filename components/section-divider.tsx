@@ -20,7 +20,7 @@ export function SectionDivider({ tone = "gold", icon: Icon = Bike }: SectionDivi
   const badge = "bg-[#28170F] text-[#E09E14] ring-[#28170F]/10"
 
   return (
-    <div className={`${bg} flex items-center justify-center px-6 py-10`} aria-hidden="true">
+    <div className={`${bg} flex items-center justify-center px-6 py-10`} aria-hidden="true" data-section-divider={tone}>
       <div className="flex w-full max-w-md items-center gap-4">
         <span className={`h-px flex-1 ${line}`} />
         <span className={`flex h-10 w-10 items-center justify-center rounded-full ring-4 ${badge}`}>

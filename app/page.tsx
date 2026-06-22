@@ -21,11 +21,11 @@ export default async function Home() {
       <main>
         <Hero content={siteData.content} />
         <About content={siteData.content} />
-        <Menu menu={siteData.menu} />
-        <Locations schedule={siteData.schedule} />
+        <Menu menu={siteData.menu} section={siteData.content.menuSection} />
+        <Locations schedule={siteData.schedule} section={siteData.content.locationsSection} />
         <Events content={siteData.content} />
         <AppPromo content={siteData.content} />
-        <Gallery gallery={siteData.gallery} />
+        <Gallery gallery={siteData.gallery} section={siteData.content.gallerySection} />
         <Contact content={siteData.content} />
       </main>
       <Footer content={siteData.content} />

@@ -15,6 +15,11 @@ export function Hero({ content }: HeroProps) {
   const secondaryText = hero.secondaryCtaText || "Kde nás nájdete"
   const secondaryLink = hero.secondaryCtaLink || "#locations"
 
+  // CTAs can be hidden from the CMS; they otherwise always have safe defaults.
+  const showPrimary = hero.showPrimaryCta !== false
+  const showSecondary = hero.showSecondaryCta !== false
+  const showCtaRow = showPrimary || showSecondary
+
   return (
     <section className="relative min-h-screen flex items-center justify-center pt-24 pb-16 overflow-hidden">
       {/* Background Image */}
@@ -58,29 +63,35 @@ export function Hero({ content }: HeroProps) {
           {hero.description || "Prinášame vám výberovú kávu priamo na ulice Bratislavy."}
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-up delay-400">
-          <Button
-            asChild
-            size="lg"
-            className="px-8 h-12 text-base bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5"
-          >
-            <Link href={primaryLink}>
-              {primaryText}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
-          <Button
-            asChild
-            variant="outline"
-            size="lg"
-            className="px-8 h-12 text-base border-accent/60 bg-background/40 backdrop-blur-sm text-accent hover:bg-accent hover:text-accent-foreground transition-transform hover:-translate-y-0.5"
-          >
-            <Link href={secondaryLink}>
-              <MapPin className="h-4 w-4" />
-              {secondaryText}
-            </Link>
-          </Button>
-        </div>
+        {showCtaRow && (
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 animate-fade-up delay-400">
+            {showPrimary && (
+              <Button
+                asChild
+                size="lg"
+                className="px-8 h-12 text-base bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg shadow-primary/20 transition-transform hover:-translate-y-0.5"
+              >
+                <Link href={primaryLink}>
+                  {primaryText}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
+            {showSecondary && (
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="px-8 h-12 text-base border-accent/60 bg-background/40 backdrop-blur-sm text-accent hover:bg-accent hover:text-accent-foreground transition-transform hover:-translate-y-0.5"
+              >
+                <Link href={secondaryLink}>
+                  <MapPin className="h-4 w-4" />
+                  {secondaryText}
+                </Link>
+              </Button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Scroll cue */}

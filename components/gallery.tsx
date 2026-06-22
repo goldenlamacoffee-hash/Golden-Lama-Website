@@ -5,13 +5,14 @@ import { useState } from "react"
 import { X, ChevronLeft, ChevronRight } from "lucide-react"
 import { Reveal } from "@/components/reveal"
 import { SectionHeading } from "@/components/section-heading"
-import type { GalleryImage } from "@/lib/types"
+import type { GalleryImage, PageContent } from "@/lib/types"
 
 interface GalleryProps {
   gallery: GalleryImage[]
+  section?: PageContent["gallerySection"]
 }
 
-export function Gallery({ gallery }: GalleryProps) {
+export function Gallery({ gallery, section }: GalleryProps) {
   const [selectedImage, setSelectedImage] = useState<number | null>(null)
 
   const openLightbox = (index: number) => setSelectedImage(index)
@@ -27,14 +28,18 @@ export function Gallery({ gallery }: GalleryProps) {
     setSelectedImage(selectedImage === gallery.length - 1 ? 0 : selectedImage + 1)
   }
 
+  // Hide when explicitly disabled, or when there are no images to show.
+  if (section?.visible === false) return null
+  if (!gallery || gallery.length === 0) return null
+
   return (
     <section id="gallery" className="py-24 bg-[#F5E3C2]">
       <div className="max-w-6xl mx-auto px-6">
         <Reveal>
           <SectionHeading
-            eyebrow="Galéria"
-            title="Náš kávový bicykel"
-            description="Pohľad do sveta Golden Lama — remeselná káva, atmosféra a komunita."
+            eyebrow={section?.eyebrow || "Galéria"}
+            title={section?.title || "Náš kávový bicykel"}
+            description={section?.subtitle || "Pohľad do sveta Golden Lama — remeselná káva, atmosféra a komunita."}
             tone="dark"
           />
         </Reveal>

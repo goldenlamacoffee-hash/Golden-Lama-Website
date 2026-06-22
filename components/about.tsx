@@ -27,6 +27,9 @@ interface AboutProps {
 export function About({ content }: AboutProps) {
   const about = content.about || { title: "", paragraphs: [] }
 
+  // Section can be hidden entirely from the CMS.
+  if (about.visible === false) return null
+
   return (
     <section id="about" className="py-24 bg-[#E09E14]">
       <div className="max-w-6xl mx-auto px-6">

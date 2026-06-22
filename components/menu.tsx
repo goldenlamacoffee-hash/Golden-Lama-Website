@@ -1,21 +1,31 @@
 import { Card, CardContent } from "@/components/ui/card"
 import { Reveal } from "@/components/reveal"
 import { SectionHeading } from "@/components/section-heading"
-import type { MenuCategory } from "@/lib/types"
+import type { MenuCategory, PageContent } from "@/lib/types"
 
 interface MenuProps {
   menu: MenuCategory[]
+  section?: PageContent["menuSection"]
 }
 
-export function Menu({ menu }: MenuProps) {
+const DEFAULT_NOTE =
+  "Všetky nápoje sú dostupné teplé alebo ľadové. Ovsené, mandľové a sójové mlieko za príplatok 0,50 €."
+
+export function Menu({ menu, section }: MenuProps) {
+  // Section can be hidden, or hidden automatically when there is nothing to show.
+  if (section?.visible === false) return null
+  if (!menu || menu.length === 0) return null
+
+  const note = section?.note !== undefined ? section.note : DEFAULT_NOTE
+
   return (
     <section id="menu" className="py-24 bg-[#E09E14]">
       <div className="max-w-6xl mx-auto px-6">
         <Reveal>
           <SectionHeading
-            eyebrow="Čo podávame"
-            title="Naše menu"
-            description="Výberová káva pripravená na objednávku — od klasiky po naše podpisové špeciality."
+            eyebrow={section?.eyebrow || "Čo podávame"}
+            title={section?.title || "Naše menu"}
+            description={section?.subtitle || "Výberová káva pripravená na objednávku — od klasiky po naše podpisové špeciality."}
             tone="dark"
           />
         </Reveal>
@@ -53,9 +63,11 @@ export function Menu({ menu }: MenuProps) {
           ))}
         </div>
 
-        <p className="text-center text-sm text-[#28170F]/80 mt-12 max-w-xl mx-auto">
-          Všetky nápoje sú dostupné teplé alebo ľadové. Ovsené, mandľové a sójové mlieko za príplatok 0,50 €.
-        </p>
+        {note && (
+          <p className="text-center text-sm text-[#28170F]/80 mt-12 max-w-xl mx-auto">
+            {note}
+          </p>
+        )}
       </div>
     </section>
   )

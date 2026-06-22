@@ -20,6 +20,17 @@ export function AppPromo({ content }: AppPromoProps) {
   const app = content.app || {}
   const features = app.features && app.features.length > 0 ? app.features : null
 
+  // Section can be hidden entirely from the CMS.
+  if (app.visible === false) return null
+
+  // Store buttons render only when a real link is present, so we never show a
+  // dead/empty CTA pointing at "#".
+  const iosLink = app.iosLink?.trim()
+  const androidLink = app.androidLink?.trim()
+  const hasIos = !!iosLink
+  const hasAndroid = !!androidLink
+  const hasStoreButtons = hasIos || hasAndroid
+
   return (
     <section id="app" className="py-24 bg-[#F5E3C2]">
       <div className="max-w-6xl mx-auto px-6">
@@ -44,7 +55,7 @@ export function AppPromo({ content }: AppPromoProps) {
           {/* Copy + features */}
           <Reveal delay={150}>
             <p className="font-accent text-lg text-[#8C6F4E] mb-3">
-              {app.subtitle || "Vernostný program"}
+              {app.eyebrow || app.subtitle || "Vernostný program"}
             </p>
             <h2 className="font-heading text-4xl md:text-5xl font-bold text-[#28170F] mb-6 uppercase tracking-wide text-balance">
               {app.title || "Stiahnite si našu aplikáciu"}
@@ -54,7 +65,7 @@ export function AppPromo({ content }: AppPromoProps) {
                 "Buďte Golden s každou kávou. Zbierajte pečiatky, využívajte kupóny a získavajte odmeny priamo vo vašom telefóne."}
             </p>
 
-            <div className="grid sm:grid-cols-2 gap-4 mb-8">
+            <div className={`grid sm:grid-cols-2 gap-4 ${hasStoreButtons ? "mb-8" : ""}`}>
               {features
                 ? features.map((text) => (
                     <div key={text} className="flex items-center gap-3">
@@ -74,29 +85,35 @@ export function AppPromo({ content }: AppPromoProps) {
                   ))}
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Button
-                asChild
-                size="lg"
-                className="px-7 h-12 gap-2 bg-[#28170F] text-[#F5E3C2] hover:bg-[#28170F]/90 transition-transform hover:-translate-y-0.5"
-              >
-                <Link href={app.iosLink || "#"}>
-                  <Apple className="h-5 w-5" />
-                  App Store
-                </Link>
-              </Button>
-              <Button
-                asChild
-                size="lg"
-                variant="outline"
-                className="px-7 h-12 gap-2 border-[#28170F]/30 text-[#28170F] hover:bg-[#28170F] hover:text-[#F5E3C2] transition-transform hover:-translate-y-0.5"
-              >
-                <Link href={app.androidLink || "#"}>
-                  <Smartphone className="h-5 w-5" />
-                  Google Play
-                </Link>
-              </Button>
-            </div>
+            {hasStoreButtons && (
+              <div className="flex flex-col sm:flex-row gap-4">
+                {hasIos && (
+                  <Button
+                    asChild
+                    size="lg"
+                    className="px-7 h-12 gap-2 bg-[#28170F] text-[#F5E3C2] hover:bg-[#28170F]/90 transition-transform hover:-translate-y-0.5"
+                  >
+                    <Link href={iosLink!} target="_blank" rel="noopener noreferrer">
+                      <Apple className="h-5 w-5" />
+                      {app.iosText?.trim() || "App Store"}
+                    </Link>
+                  </Button>
+                )}
+                {hasAndroid && (
+                  <Button
+                    asChild
+                    size="lg"
+                    variant="outline"
+                    className="px-7 h-12 gap-2 border-[#28170F]/30 text-[#28170F] hover:bg-[#28170F] hover:text-[#F5E3C2] transition-transform hover:-translate-y-0.5"
+                  >
+                    <Link href={androidLink!} target="_blank" rel="noopener noreferrer">
+                      <Smartphone className="h-5 w-5" />
+                      {app.androidText?.trim() || "Google Play"}
+                    </Link>
+                  </Button>
+                )}
+              </div>
+            )}
           </Reveal>
         </div>
       </div>

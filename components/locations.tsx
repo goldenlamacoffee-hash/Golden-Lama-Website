@@ -2,21 +2,33 @@ import { MapPin, Clock, Calendar } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Reveal } from "@/components/reveal"
 import { SectionHeading } from "@/components/section-heading"
-import type { ScheduleItem } from "@/lib/types"
+import type { ScheduleItem, PageContent } from "@/lib/types"
 
 interface LocationsProps {
   schedule: ScheduleItem[]
+  section?: PageContent["locationsSection"]
 }
 
-export function Locations({ schedule }: LocationsProps) {
+const DEFAULT_MAP_URL = "https://maps.google.com/?q=Bratislava"
+const DEFAULT_NOTE =
+  "Rozvrh sa môže meniť v závislosti od počasia alebo špeciálnych akcií. Sledujte nás na sociálnych sieťach!"
+
+export function Locations({ schedule, section }: LocationsProps) {
+  // Hide when explicitly disabled, or when there is no schedule to show.
+  if (section?.visible === false) return null
+  if (!schedule || schedule.length === 0) return null
+
+  const mapUrl = section?.mapUrl !== undefined ? section.mapUrl : DEFAULT_MAP_URL
+  const note = section?.note !== undefined ? section.note : DEFAULT_NOTE
+
   return (
     <section id="locations" className="py-24 bg-[#F5E3C2]">
       <div className="max-w-6xl mx-auto px-6">
         <Reveal>
           <SectionHeading
-            eyebrow="Týždenný rozvrh"
-            title="Kde nás nájdete"
-            description="Každý týždeň sme na rôznych miestach. Pozrite si náš rozvrh a stavte sa na výnimočnú kávu!"
+            eyebrow={section?.eyebrow || "Týždenný rozvrh"}
+            title={section?.title || "Kde nás nájdete"}
+            description={section?.subtitle || "Každý týždeň sme na rôznych miestach. Pozrite si náš rozvrh a stavte sa na výnimočnú kávu!"}
             tone="dark"
           />
         </Reveal>
@@ -49,22 +61,28 @@ export function Locations({ schedule }: LocationsProps) {
           ))}
         </div>
 
-        <Reveal>
-          <div className="mt-12 flex flex-col items-center gap-3">
-            <a
-              href="https://maps.google.com/?q=Bratislava"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 text-sm font-semibold text-[#28170F] underline-offset-4 hover:underline"
-            >
-              <MapPin className="h-4 w-4" />
-              Zobraziť na mape
-            </a>
-            <p className="text-center text-sm text-[#28170F]/60 max-w-md">
-              Rozvrh sa môže meniť v závislosti od počasia alebo špeciálnych akcií. Sledujte nás na sociálnych sieťach!
-            </p>
-          </div>
-        </Reveal>
+        {(mapUrl || note) && (
+          <Reveal>
+            <div className="mt-12 flex flex-col items-center gap-3">
+              {mapUrl && (
+                <a
+                  href={mapUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#28170F] underline-offset-4 hover:underline"
+                >
+                  <MapPin className="h-4 w-4" />
+                  Zobraziť na mape
+                </a>
+              )}
+              {note && (
+                <p className="text-center text-sm text-[#28170F]/60 max-w-md">
+                  {note}
+                </p>
+              )}
+            </div>
+          </Reveal>
+        )}
       </div>
     </section>
   )

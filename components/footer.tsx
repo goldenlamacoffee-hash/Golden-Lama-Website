@@ -44,7 +44,7 @@ export function Footer({ content }: FooterProps) {
                 Golden Lama
               </span>
             </Link>
-            <p className="font-accent text-2xl text-primary mb-4">Be Golden</p>
+            <p className="font-accent text-2xl text-primary mb-4">{footer.tagline || "Be Golden"}</p>
             <p className="font-body text-sm text-muted-foreground leading-relaxed max-w-sm text-pretty">
               {footer.text ||
                 "Remeselná káva na kolesách. Prinášame výnimočnú kávu priamo k ľuďom, ktorí ju milujú — na trhoch, podujatiach a po celom meste."}

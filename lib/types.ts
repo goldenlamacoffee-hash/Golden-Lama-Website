@@ -31,34 +31,75 @@ export interface PageContent {
     primaryCtaLink?: string
     secondaryCtaText?: string
     secondaryCtaLink?: string
+    /** When false, the matching CTA button is hidden even if text/link exist. Defaults to shown. */
+    showPrimaryCta?: boolean
+    showSecondaryCta?: boolean
   }
   about: {
     title: string
     subtitle?: string
     paragraphs: string[]
+    /** Section show/hide. Undefined or true = visible. */
+    visible?: boolean
+  }
+  /** Heading/intro copy for the Menu section (items themselves live in `menu`). */
+  menuSection?: {
+    eyebrow?: string
+    title?: string
+    subtitle?: string
+    note?: string
+    visible?: boolean
+  }
+  /** Heading/intro copy for the Locations / schedule section. */
+  locationsSection?: {
+    eyebrow?: string
+    title?: string
+    subtitle?: string
+    mapUrl?: string
+    note?: string
+    visible?: boolean
+  }
+  /** Heading/intro copy for the Gallery section (images live in `gallery`). */
+  gallerySection?: {
+    eyebrow?: string
+    title?: string
+    subtitle?: string
+    visible?: boolean
   }
   events?: {
+    eyebrow?: string
     title?: string
     subtitle?: string
     description?: string
     ctaText?: string
     ctaLink?: string
     bullets?: string[]
+    visible?: boolean
   }
   app?: {
+    eyebrow?: string
     title?: string
     subtitle?: string
     description?: string
     features?: string[]
+    iosText?: string
     iosLink?: string
+    androidText?: string
     androidLink?: string
+    visible?: boolean
   }
   contact: {
+    eyebrow?: string
+    title?: string
+    subtitle?: string
     email: string
     phone: string
     instagram: string
     facebook?: string
     tiktok?: string
+    emailCtaText?: string
+    instagramCtaText?: string
+    visible?: boolean
   }
   footer?: {
     tagline?: string

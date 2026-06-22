@@ -1,369 +1,572 @@
 "use client"
 
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { PageContent } from "@/lib/types"
-import { Save, Plus, Trash2 } from "lucide-react"
+import {
+  Save,
+  Plus,
+  Trash2,
+  AlertTriangle,
+  CheckCircle2,
+  Info,
+  Megaphone,
+  BookOpen,
+  Coffee,
+  MapPin,
+  Image as ImageIcon,
+  CalendarHeart,
+  Smartphone,
+  Mail,
+  PanelBottom,
+} from "lucide-react"
 
 interface ContentEditorProps {
   content: PageContent
   setContent: (content: PageContent) => void
 }
 
+type SectionKey =
+  | "hero"
+  | "about"
+  | "menuSection"
+  | "locationsSection"
+  | "events"
+  | "app"
+  | "gallerySection"
+  | "contact"
+  | "footer"
+
+const NAV: { key: SectionKey; label: string; icon: typeof Coffee }[] = [
+  { key: "hero", label: "Hero", icon: Megaphone },
+  { key: "about", label: "Príbeh", icon: BookOpen },
+  { key: "menuSection", label: "Menu", icon: Coffee },
+  { key: "locationsSection", label: "Kde nás nájdete", icon: MapPin },
+  { key: "gallerySection", label: "Galéria", icon: ImageIcon },
+  { key: "events", label: "Akcie / Rezervácie", icon: CalendarHeart },
+  { key: "app", label: "Aplikácia / Vernosť", icon: Smartphone },
+  { key: "contact", label: "Kontakt", icon: Mail },
+  { key: "footer", label: "Pätička", icon: PanelBottom },
+]
+
+/**
+ * Permissive link validation: allows empty values, absolute http(s) URLs,
+ * mailto:/tel: targets, in-page anchors (#id) and root-relative paths (/x).
+ */
+function isValidLink(value: string | undefined): boolean {
+  const v = (value || "").trim()
+  if (!v) return true
+  if (v.startsWith("#") || v.startsWith("/")) return true
+  if (/^(mailto:|tel:)/i.test(v)) return true
+  try {
+    const u = new URL(v)
+    return u.protocol === "http:" || u.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
+const inputClass = "bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
+
+function Field({
+  label,
+  hint,
+  error,
+  children,
+}: {
+  label: string
+  hint?: string
+  error?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div>
+      <label className="text-sm text-[#F5E3C2]/80 mb-1 block">{label}</label>
+      {children}
+      {hint && <p className="text-xs text-[#8C6F4E] mt-1">{hint}</p>}
+      {error && (
+        <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+          <AlertTriangle className="h-3 w-3" /> {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function ContentEditor({ content, setContent }: ContentEditorProps) {
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState("")
+  const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null)
+  const [active, setActive] = useState<SectionKey>("hero")
+
+  // ---- update helpers (always spread existing data so nothing is wiped) ----
+  const setHero = (field: string, value: unknown) =>
+    setContent({ ...content, hero: { ...content.hero, [field]: value } })
+  const setAbout = (field: string, value: unknown) =>
+    setContent({ ...content, about: { ...content.about, [field]: value } })
+  const setContact = (field: string, value: unknown) =>
+    setContent({ ...content, contact: { ...content.contact, [field]: value } })
+
+  const setSection = (key: SectionKey, field: string, value: unknown) =>
+    setContent({
+      ...content,
+      [key]: { ...((content[key] as Record<string, unknown>) || {}), [field]: value },
+    })
+
+  const updateParagraph = (index: number, value: string) => {
+    const next = [...(content.about?.paragraphs || [])]
+    next[index] = value
+    setAbout("paragraphs", next)
+  }
+  const addParagraph = () => setAbout("paragraphs", [...(content.about?.paragraphs || []), ""])
+  const removeParagraph = (index: number) => {
+    const next = [...(content.about?.paragraphs || [])]
+    next.splice(index, 1)
+    setAbout("paragraphs", next)
+  }
+
+  // ---- validation ----
+  const linkErrors = useMemo(() => {
+    const errs: Record<string, boolean> = {}
+    const check = (id: string, val?: string) => {
+      if (!isValidLink(val)) errs[id] = true
+    }
+    check("hero.primaryCtaLink", content.hero?.primaryCtaLink)
+    check("hero.secondaryCtaLink", content.hero?.secondaryCtaLink)
+    check("events.ctaLink", content.events?.ctaLink)
+    check("app.iosLink", content.app?.iosLink)
+    check("app.androidLink", content.app?.androidLink)
+    check("contact.facebook", content.contact?.facebook)
+    check("contact.tiktok", content.contact?.tiktok)
+    check("locationsSection.mapUrl", content.locationsSection?.mapUrl)
+    return errs
+  }, [content])
+
+  const hasErrors = Object.keys(linkErrors).length > 0
+  const linkHint = "Nechajte prázdne, alebo zadajte platný odkaz (https://…, mailto:…, #sekcia)."
 
   const handleSave = async () => {
+    if (hasErrors) {
+      setMessage({ type: "err", text: "Opravte neplatné odkazy pred uložením." })
+      return
+    }
     setSaving(true)
-    setMessage("")
+    setMessage(null)
     try {
       const res = await fetch("/api/admin/content", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(content),
       })
-      if (res.ok) {
-        setMessage("Obsah bol ulozeny!")
-      } else {
-        setMessage("Chyba pri ukladani")
-      }
+      setMessage(
+        res.ok
+          ? { type: "ok", text: "Obsah bol uložený!" }
+          : { type: "err", text: "Chyba pri ukladaní" },
+      )
     } catch {
-      setMessage("Chyba pripojenia")
+      setMessage({ type: "err", text: "Chyba pripojenia" })
     }
     setSaving(false)
   }
 
-  const updateHero = (field: keyof PageContent["hero"], value: string) => {
-    setContent({
-      ...content,
-      hero: { ...content.hero, [field]: value }
-    })
+  // ---- visibility toggle (only for sections that support it) ----
+  const visibleSections: Partial<Record<SectionKey, boolean>> = {
+    about: content.about?.visible !== false,
+    menuSection: content.menuSection?.visible !== false,
+    locationsSection: content.locationsSection?.visible !== false,
+    gallerySection: content.gallerySection?.visible !== false,
+    events: content.events?.visible !== false,
+    app: content.app?.visible !== false,
+    contact: content.contact?.visible !== false,
   }
+  const supportsVisibility = (k: SectionKey) => k in visibleSections
 
-  const updateAbout = (field: keyof PageContent["about"], value: string | string[]) => {
-    setContent({
-      ...content,
-      about: { ...content.about, [field]: value }
-    })
-  }
-
-  const updateContact = (field: keyof PageContent["contact"], value: string) => {
-    setContent({
-      ...content,
-      contact: { ...content.contact, [field]: value }
-    })
-  }
-
-  const updateEvents = (field: string, value: string) => {
-    setContent({
-      ...content,
-      events: { ...(content.events || {}), [field]: value }
-    })
-  }
-
-  const updateApp = (field: string, value: string) => {
-    setContent({
-      ...content,
-      app: { ...(content.app || {}), [field]: value }
-    })
-  }
-
-  const updateFooter = (field: string, value: string) => {
-    setContent({
-      ...content,
-      footer: { ...(content.footer || {}), [field]: value }
-    })
-  }
-
-  const updateParagraph = (index: number, value: string) => {
-    const newParagraphs = [...(content.about?.paragraphs || [])]
-    newParagraphs[index] = value
-    updateAbout("paragraphs", newParagraphs)
-  }
-
-  const addParagraph = () => {
-    const newParagraphs = [...(content.about?.paragraphs || []), ""]
-    updateAbout("paragraphs", newParagraphs)
-  }
-
-  const removeParagraph = (index: number) => {
-    const newParagraphs = [...(content.about?.paragraphs || [])]
-    newParagraphs.splice(index, 1)
-    updateAbout("paragraphs", newParagraphs)
-  }
+  const SectionShell = ({
+    sectionKey,
+    title,
+    description,
+    children,
+  }: {
+    sectionKey: SectionKey
+    title: string
+    description: string
+    children: React.ReactNode
+  }) => (
+    <Card className="bg-[#3a251a] border-[#8C6F4E]/30">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <CardTitle className="text-[#E09E14]">{title}</CardTitle>
+            <p className="text-sm text-[#8C6F4E] mt-1 max-w-prose">{description}</p>
+          </div>
+          {supportsVisibility(sectionKey) && (
+            <label className="flex shrink-0 items-center gap-2 text-sm text-[#F5E3C2]/80">
+              <Switch
+                checked={visibleSections[sectionKey]}
+                onCheckedChange={(v) => setSection(sectionKey, "visible", v)}
+              />
+              {visibleSections[sectionKey] ? "Zobrazené" : "Skryté"}
+            </label>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">{children}</CardContent>
+    </Card>
+  )
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="font-heading text-2xl text-[#F5E3C2]">Upravit Obsah</h2>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-heading text-2xl text-[#F5E3C2]">Obsah webu</h2>
+          <p className="text-sm text-[#8C6F4E] flex items-center gap-1.5">
+            <Info className="h-3.5 w-3.5" />
+            Ukladáte verejný obsah webovej stránky. Prázdne polia použijú bezpečné predvolené hodnoty.
+          </p>
+        </div>
         <div className="flex items-center gap-4">
-          {message && <span className="text-[#E09E14] text-sm">{message}</span>}
-          <Button onClick={handleSave} disabled={saving} className="bg-[#E09E14] hover:bg-[#E09E14]/90 text-[#28170F]">
+          {message && (
+            <span
+              className={`text-sm flex items-center gap-1.5 ${
+                message.type === "ok" ? "text-[#E09E14]" : "text-red-400"
+              }`}
+            >
+              {message.type === "ok" ? (
+                <CheckCircle2 className="h-4 w-4" />
+              ) : (
+                <AlertTriangle className="h-4 w-4" />
+              )}
+              {message.text}
+            </span>
+          )}
+          <Button
+            onClick={handleSave}
+            disabled={saving || hasErrors}
+            className="bg-[#E09E14] hover:bg-[#E09E14]/90 text-[#28170F]"
+          >
             <Save className="h-4 w-4 mr-2" />
-            {saving ? "Ukladam..." : "Ulozit"}
+            {saving ? "Ukladám..." : "Uložiť"}
           </Button>
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card className="bg-[#3a251a] border-[#8C6F4E]/30">
-          <CardHeader>
-            <CardTitle className="text-[#E09E14]">Hero Sekcia</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Podnadpis</label>
-              <Input
-                value={content.hero?.subtitle || ""}
-                onChange={(e) => updateHero("subtitle", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Nadpis</label>
-              <Input
-                value={content.hero?.title || ""}
-                onChange={(e) => updateHero("title", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Popis</label>
-              <Textarea
-                value={content.hero?.description || ""}
-                onChange={(e) => updateHero("description", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                rows={3}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-[#3a251a] border-[#8C6F4E]/30">
-          <CardHeader>
-            <CardTitle className="text-[#E09E14]">O Nas Sekcia</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Nadpis</label>
-              <Input
-                value={content.about?.title || ""}
-                onChange={(e) => updateAbout("title", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Odseky</label>
-              {(content.about?.paragraphs || []).map((para, index) => (
-                <div key={`para-${index}`} className="flex gap-2 mb-2">
-                  <Textarea
-                    value={para}
-                    onChange={(e) => updateParagraph(index, e.target.value)}
-                    className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                    rows={2}
-                  />
-                  <Button
-                    onClick={() => removeParagraph(index)}
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-400 hover:text-red-300 hover:bg-red-400/10 shrink-0"
+      <div className="grid gap-6 lg:grid-cols-[220px_1fr]">
+        {/* Section navigation */}
+        <nav className="flex gap-2 overflow-x-auto lg:flex-col lg:overflow-visible">
+          {NAV.map(({ key, label, icon: Icon }) => {
+            const isActive = active === key
+            const hidden = supportsVisibility(key) && !visibleSections[key]
+            return (
+              <button
+                key={key}
+                onClick={() => setActive(key)}
+                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm text-left transition-colors ${
+                  isActive
+                    ? "bg-[#E09E14] text-[#28170F] font-medium"
+                    : "text-[#F5E3C2]/80 hover:bg-[#8C6F4E]/20"
+                }`}
+              >
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="whitespace-nowrap">{label}</span>
+                {hidden && (
+                  <span
+                    className={`ml-auto hidden lg:inline text-[10px] uppercase tracking-wide ${
+                      isActive ? "text-[#28170F]/70" : "text-[#8C6F4E]"
+                    }`}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    skryté
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </nav>
+
+        {/* Active section editor */}
+        <div className="min-w-0">
+          {active === "hero" && (
+            <SectionShell
+              sectionKey="hero"
+              title="Hero sekcia"
+              description="Hlavná úvodná sekcia na vrchu stránky — nadpis, podnadpis a tlačidlá výzvy."
+            >
+              <Field label="Podnadpis (malý text nad nadpisom)">
+                <Input value={content.hero?.subtitle || ""} onChange={(e) => setHero("subtitle", e.target.value)} className={inputClass} />
+              </Field>
+              <Field label="Nadpis">
+                <Input value={content.hero?.title || ""} onChange={(e) => setHero("title", e.target.value)} className={inputClass} />
+              </Field>
+              <Field label="Popis">
+                <Textarea value={content.hero?.description || ""} onChange={(e) => setHero("description", e.target.value)} className={inputClass} rows={3} />
+              </Field>
+
+              <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-[#F5E3C2]">Hlavné tlačidlo</p>
+                  <label className="flex items-center gap-2 text-sm text-[#F5E3C2]/80">
+                    <Switch checked={content.hero?.showPrimaryCta !== false} onCheckedChange={(v) => setHero("showPrimaryCta", v)} />
+                    {content.hero?.showPrimaryCta !== false ? "Zobrazené" : "Skryté"}
+                  </label>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Text tlačidla">
+                    <Input value={content.hero?.primaryCtaText || ""} onChange={(e) => setHero("primaryCtaText", e.target.value)} className={inputClass} placeholder="Pozrite si naše menu" />
+                  </Field>
+                  <Field label="Odkaz tlačidla" hint={linkHint} error={linkErrors["hero.primaryCtaLink"] ? "Neplatný odkaz" : undefined}>
+                    <Input value={content.hero?.primaryCtaLink || ""} onChange={(e) => setHero("primaryCtaLink", e.target.value)} className={inputClass} placeholder="#menu" />
+                  </Field>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-[#F5E3C2]">Vedľajšie tlačidlo</p>
+                  <label className="flex items-center gap-2 text-sm text-[#F5E3C2]/80">
+                    <Switch checked={content.hero?.showSecondaryCta !== false} onCheckedChange={(v) => setHero("showSecondaryCta", v)} />
+                    {content.hero?.showSecondaryCta !== false ? "Zobrazené" : "Skryté"}
+                  </label>
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Text tlačidla">
+                    <Input value={content.hero?.secondaryCtaText || ""} onChange={(e) => setHero("secondaryCtaText", e.target.value)} className={inputClass} placeholder="Kde nás nájdete" />
+                  </Field>
+                  <Field label="Odkaz tlačidla" hint={linkHint} error={linkErrors["hero.secondaryCtaLink"] ? "Neplatný odkaz" : undefined}>
+                    <Input value={content.hero?.secondaryCtaLink || ""} onChange={(e) => setHero("secondaryCtaLink", e.target.value)} className={inputClass} placeholder="#locations" />
+                  </Field>
+                </div>
+              </div>
+            </SectionShell>
+          )}
+
+          {active === "about" && (
+            <SectionShell
+              sectionKey="about"
+              title="Príbeh / O nás"
+              description="Sekcia s príbehom značky. Karty hodnôt vpravo sú súčasťou dizajnu a nie sú editovateľné."
+            >
+              <Field label="Podnadpis">
+                <Input value={content.about?.subtitle || ""} onChange={(e) => setAbout("subtitle", e.target.value)} className={inputClass} placeholder="Náš príbeh" />
+              </Field>
+              <Field label="Nadpis">
+                <Input value={content.about?.title || ""} onChange={(e) => setAbout("title", e.target.value)} className={inputClass} placeholder="Káva s poslaním" />
+              </Field>
+              <Field label="Odseky textu">
+                <div className="space-y-2">
+                  {(content.about?.paragraphs || []).map((para, index) => (
+                    <div key={`para-${index}`} className="flex gap-2">
+                      <Textarea value={para} onChange={(e) => updateParagraph(index, e.target.value)} className={inputClass} rows={2} />
+                      <Button onClick={() => removeParagraph(index)} variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-400/10 shrink-0">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button onClick={addParagraph} variant="outline" size="sm" className="border-[#8C6F4E]/50 text-[#F5E3C2] hover:bg-[#8C6F4E]/20">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Pridať odsek
                   </Button>
                 </div>
-              ))}
-              <Button
-                onClick={addParagraph}
-                variant="outline"
-                size="sm"
-                className="border-[#8C6F4E]/50 text-[#F5E3C2] hover:bg-[#8C6F4E]/20"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Pridat odsek
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              </Field>
+            </SectionShell>
+          )}
 
-        <Card className="bg-[#3a251a] border-[#8C6F4E]/30 lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-[#E09E14]">Kontakt Sekcia</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid sm:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Email</label>
-                <Input
-                  value={content.contact?.email || ""}
-                  onChange={(e) => updateContact("email", e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Telefon</label>
-                <Input
-                  value={content.contact?.phone || ""}
-                  onChange={(e) => updateContact("phone", e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Instagram</label>
-                <Input
-                  value={content.contact?.instagram || ""}
-                  onChange={(e) => updateContact("instagram", e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                  placeholder="@goldenlamacoffee"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Facebook URL</label>
-                <Input
-                  value={content.contact?.facebook || ""}
-                  onChange={(e) => updateContact("facebook" as keyof PageContent["contact"], e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                  placeholder="https://facebook.com/..."
-                />
-              </div>
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">TikTok URL</label>
-                <Input
-                  value={content.contact?.tiktok || ""}
-                  onChange={(e) => updateContact("tiktok" as keyof PageContent["contact"], e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                  placeholder="https://tiktok.com/@..."
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {active === "menuSection" && (
+            <SectionShell
+              sectionKey="menuSection"
+              title="Menu — nadpis sekcie"
+              description="Ovláda nadpisy nad menu. Samotné položky menu upravíte v záložke „Menu“. Ak nie sú žiadne položky, sekcia sa skryje."
+            >
+              <Field label="Podnadpis">
+                <Input value={content.menuSection?.eyebrow || ""} onChange={(e) => setSection("menuSection", "eyebrow", e.target.value)} className={inputClass} placeholder="Čo podávame" />
+              </Field>
+              <Field label="Nadpis">
+                <Input value={content.menuSection?.title || ""} onChange={(e) => setSection("menuSection", "title", e.target.value)} className={inputClass} placeholder="Naše menu" />
+              </Field>
+              <Field label="Popis">
+                <Textarea value={content.menuSection?.subtitle || ""} onChange={(e) => setSection("menuSection", "subtitle", e.target.value)} className={inputClass} rows={2} />
+              </Field>
+              <Field label="Poznámka pod menu" hint="Napr. informácie o mlieku a príplatkoch. Prázdne = skryté.">
+                <Textarea value={content.menuSection?.note ?? ""} onChange={(e) => setSection("menuSection", "note", e.target.value)} className={inputClass} rows={2} />
+              </Field>
+            </SectionShell>
+          )}
 
-        {/* Events / Private booking */}
-        <Card className="bg-[#3a251a] border-[#8C6F4E]/30">
-          <CardHeader>
-            <CardTitle className="text-[#E09E14]">Akcie / Rezervácie</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Podnadpis</label>
-              <Input
-                value={content.events?.subtitle || ""}
-                onChange={(e) => updateEvents("subtitle", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Nadpis</label>
-              <Input
-                value={content.events?.title || ""}
-                onChange={(e) => updateEvents("title", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Popis</label>
-              <Textarea
-                value={content.events?.description || ""}
-                onChange={(e) => updateEvents("description", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Text tlačidla</label>
-                <Input
-                  value={content.events?.ctaText || ""}
-                  onChange={(e) => updateEvents("ctaText", e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Odkaz tlačidla</label>
-                <Input
-                  value={content.events?.ctaLink || ""}
-                  onChange={(e) => updateEvents("ctaLink", e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                  placeholder="mailto:... alebo #contact"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {active === "locationsSection" && (
+            <SectionShell
+              sectionKey="locationsSection"
+              title="Kde nás nájdete — nadpis sekcie"
+              description="Ovláda nadpisy a odkaz na mapu. Jednotlivé lokality upravíte v záložke „Rozvrh“. Bez lokalít sa sekcia skryje."
+            >
+              <Field label="Podnadpis">
+                <Input value={content.locationsSection?.eyebrow || ""} onChange={(e) => setSection("locationsSection", "eyebrow", e.target.value)} className={inputClass} placeholder="Týždenný rozvrh" />
+              </Field>
+              <Field label="Nadpis">
+                <Input value={content.locationsSection?.title || ""} onChange={(e) => setSection("locationsSection", "title", e.target.value)} className={inputClass} placeholder="Kde nás nájdete" />
+              </Field>
+              <Field label="Popis">
+                <Textarea value={content.locationsSection?.subtitle || ""} onChange={(e) => setSection("locationsSection", "subtitle", e.target.value)} className={inputClass} rows={2} />
+              </Field>
+              <Field label="Odkaz na mapu" hint={linkHint} error={linkErrors["locationsSection.mapUrl"] ? "Neplatný odkaz" : undefined}>
+                <Input value={content.locationsSection?.mapUrl ?? ""} onChange={(e) => setSection("locationsSection", "mapUrl", e.target.value)} className={inputClass} placeholder="https://maps.google.com/?q=..." />
+              </Field>
+              <Field label="Poznámka pod rozvrhom" hint="Prázdne = skryté.">
+                <Textarea value={content.locationsSection?.note ?? ""} onChange={(e) => setSection("locationsSection", "note", e.target.value)} className={inputClass} rows={2} />
+              </Field>
+            </SectionShell>
+          )}
 
-        {/* App / Loyalty */}
-        <Card className="bg-[#3a251a] border-[#8C6F4E]/30">
-          <CardHeader>
-            <CardTitle className="text-[#E09E14]">Aplikácia / Vernosť</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Podnadpis</label>
-              <Input
-                value={content.app?.subtitle || ""}
-                onChange={(e) => updateApp("subtitle", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Nadpis</label>
-              <Input
-                value={content.app?.title || ""}
-                onChange={(e) => updateApp("title", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-              />
-            </div>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Popis</label>
-              <Textarea
-                value={content.app?.description || ""}
-                onChange={(e) => updateApp("description", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                rows={3}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">App Store odkaz</label>
-                <Input
-                  value={content.app?.iosLink || ""}
-                  onChange={(e) => updateApp("iosLink", e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
-              </div>
-              <div>
-                <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Google Play odkaz</label>
-                <Input
-                  value={content.app?.androidLink || ""}
-                  onChange={(e) => updateApp("androidLink", e.target.value)}
-                  className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {active === "gallerySection" && (
+            <SectionShell
+              sectionKey="gallerySection"
+              title="Galéria — nadpis sekcie"
+              description="Ovláda nadpisy galérie. Obrázky pridáte v záložke „Galéria“. Bez obrázkov sa sekcia skryje."
+            >
+              <Field label="Podnadpis">
+                <Input value={content.gallerySection?.eyebrow || ""} onChange={(e) => setSection("gallerySection", "eyebrow", e.target.value)} className={inputClass} placeholder="Galéria" />
+              </Field>
+              <Field label="Nadpis">
+                <Input value={content.gallerySection?.title || ""} onChange={(e) => setSection("gallerySection", "title", e.target.value)} className={inputClass} placeholder="Náš kávový bicykel" />
+              </Field>
+              <Field label="Popis">
+                <Textarea value={content.gallerySection?.subtitle || ""} onChange={(e) => setSection("gallerySection", "subtitle", e.target.value)} className={inputClass} rows={2} />
+              </Field>
+            </SectionShell>
+          )}
 
-        {/* Footer */}
-        <Card className="bg-[#3a251a] border-[#8C6F4E]/30 lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-[#E09E14]">Pätička</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div>
-              <label className="text-sm text-[#F5E3C2]/70 mb-1 block">Text pätičky</label>
-              <Textarea
-                value={content.footer?.text || ""}
-                onChange={(e) => updateFooter("text", e.target.value)}
-                className="bg-[#28170F] border-[#8C6F4E]/50 text-[#F5E3C2]"
-                rows={2}
-              />
-            </div>
-          </CardContent>
-        </Card>
+          {active === "events" && (
+            <SectionShell
+              sectionKey="events"
+              title="Akcie / Rezervácie"
+              description="Sekcia pre súkromné akcie a rezervácie. Tlačidlo sa zobrazí len ak má text aj platný odkaz."
+            >
+              <Field label="Podnadpis">
+                <Input value={content.events?.eyebrow || content.events?.subtitle || ""} onChange={(e) => setSection("events", "subtitle", e.target.value)} className={inputClass} placeholder="Akcie a súkromné rezervácie" />
+              </Field>
+              <Field label="Nadpis">
+                <Input value={content.events?.title || ""} onChange={(e) => setSection("events", "title", e.target.value)} className={inputClass} placeholder="Golden Lama na vašej akcii" />
+              </Field>
+              <Field label="Popis">
+                <Textarea value={content.events?.description || ""} onChange={(e) => setSection("events", "description", e.target.value)} className={inputClass} rows={3} />
+              </Field>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Text tlačidla">
+                  <Input value={content.events?.ctaText || ""} onChange={(e) => setSection("events", "ctaText", e.target.value)} className={inputClass} placeholder="Rezervovať pre akciu" />
+                </Field>
+                <Field label="Odkaz tlačidla" hint={linkHint} error={linkErrors["events.ctaLink"] ? "Neplatný odkaz" : undefined}>
+                  <Input value={content.events?.ctaLink || ""} onChange={(e) => setSection("events", "ctaLink", e.target.value)} className={inputClass} placeholder="mailto:... alebo #contact" />
+                </Field>
+              </div>
+            </SectionShell>
+          )}
+
+          {active === "app" && (
+            <SectionShell
+              sectionKey="app"
+              title="Aplikácia / Vernosť"
+              description="Sekcia mobilnej aplikácie. Tlačidlá obchodov sa zobrazia len ak vyplníte ich odkaz."
+            >
+              <Field label="Podnadpis">
+                <Input value={content.app?.eyebrow || content.app?.subtitle || ""} onChange={(e) => setSection("app", "subtitle", e.target.value)} className={inputClass} placeholder="Vernostný program" />
+              </Field>
+              <Field label="Nadpis">
+                <Input value={content.app?.title || ""} onChange={(e) => setSection("app", "title", e.target.value)} className={inputClass} placeholder="Stiahnite si našu aplikáciu" />
+              </Field>
+              <Field label="Popis">
+                <Textarea value={content.app?.description || ""} onChange={(e) => setSection("app", "description", e.target.value)} className={inputClass} rows={3} />
+              </Field>
+
+              <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-3">
+                <p className="text-sm font-medium text-[#F5E3C2]">App Store (iOS)</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Text tlačidla">
+                    <Input value={content.app?.iosText || ""} onChange={(e) => setSection("app", "iosText", e.target.value)} className={inputClass} placeholder="App Store" />
+                  </Field>
+                  <Field label="Odkaz" hint={linkHint} error={linkErrors["app.iosLink"] ? "Neplatný odkaz" : undefined}>
+                    <Input value={content.app?.iosLink || ""} onChange={(e) => setSection("app", "iosLink", e.target.value)} className={inputClass} placeholder="https://apps.apple.com/..." />
+                  </Field>
+                </div>
+                <p className="text-xs text-[#8C6F4E]">Bez odkazu sa tlačidlo App Store nezobrazí.</p>
+              </div>
+
+              <div className="rounded-lg border border-[#8C6F4E]/30 p-4 space-y-3">
+                <p className="text-sm font-medium text-[#F5E3C2]">Google Play (Android)</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Text tlačidla">
+                    <Input value={content.app?.androidText || ""} onChange={(e) => setSection("app", "androidText", e.target.value)} className={inputClass} placeholder="Google Play" />
+                  </Field>
+                  <Field label="Odkaz" hint={linkHint} error={linkErrors["app.androidLink"] ? "Neplatný odkaz" : undefined}>
+                    <Input value={content.app?.androidLink || ""} onChange={(e) => setSection("app", "androidLink", e.target.value)} className={inputClass} placeholder="https://play.google.com/..." />
+                  </Field>
+                </div>
+                <p className="text-xs text-[#8C6F4E]">Bez odkazu sa tlačidlo Google Play nezobrazí.</p>
+              </div>
+            </SectionShell>
+          )}
+
+          {active === "contact" && (
+            <SectionShell
+              sectionKey="contact"
+              title="Kontakt"
+              description="Kontaktné údaje a sociálne siete. Tlačidlo Instagramu a sociálne ikony sa zobrazia len ak sú vyplnené."
+            >
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Podnadpis">
+                  <Input value={content.contact?.eyebrow || ""} onChange={(e) => setContact("eyebrow", e.target.value)} className={inputClass} placeholder="Kontakt" />
+                </Field>
+                <Field label="Nadpis">
+                  <Input value={content.contact?.title || ""} onChange={(e) => setContact("title", e.target.value)} className={inputClass} placeholder="Spojte sa s nami" />
+                </Field>
+              </div>
+              <Field label="Popis">
+                <Textarea value={content.contact?.subtitle || ""} onChange={(e) => setContact("subtitle", e.target.value)} className={inputClass} rows={2} />
+              </Field>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <Field label="Email">
+                  <Input value={content.contact?.email || ""} onChange={(e) => setContact("email", e.target.value)} className={inputClass} placeholder="ahoj@goldenlama.sk" />
+                </Field>
+                <Field label="Telefón" hint="Prázdne = skryté">
+                  <Input value={content.contact?.phone || ""} onChange={(e) => setContact("phone", e.target.value)} className={inputClass} />
+                </Field>
+                <Field label="Instagram" hint="Prázdne = tlačidlo skryté">
+                  <Input value={content.contact?.instagram || ""} onChange={(e) => setContact("instagram", e.target.value)} className={inputClass} placeholder="@goldenlamacoffee" />
+                </Field>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Facebook URL" hint={linkHint} error={linkErrors["contact.facebook"] ? "Neplatný odkaz" : undefined}>
+                  <Input value={content.contact?.facebook || ""} onChange={(e) => setContact("facebook", e.target.value)} className={inputClass} placeholder="https://facebook.com/..." />
+                </Field>
+                <Field label="TikTok URL" hint={linkHint} error={linkErrors["contact.tiktok"] ? "Neplatný odkaz" : undefined}>
+                  <Input value={content.contact?.tiktok || ""} onChange={(e) => setContact("tiktok", e.target.value)} className={inputClass} placeholder="https://tiktok.com/@..." />
+                </Field>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Field label="Text email tlačidla">
+                  <Input value={content.contact?.emailCtaText || ""} onChange={(e) => setContact("emailCtaText", e.target.value)} className={inputClass} placeholder="Napíšte nám" />
+                </Field>
+                <Field label="Text Instagram tlačidla">
+                  <Input value={content.contact?.instagramCtaText || ""} onChange={(e) => setContact("instagramCtaText", e.target.value)} className={inputClass} placeholder="Sledujte nás" />
+                </Field>
+              </div>
+            </SectionShell>
+          )}
+
+          {active === "footer" && (
+            <SectionShell
+              sectionKey="footer"
+              title="Pätička"
+              description="Text a slogan v spodnej časti stránky. Navigácia a copyright sú generované automaticky."
+            >
+              <Field label="Slogan (zlatý text)">
+                <Input value={content.footer?.tagline || ""} onChange={(e) => setSection("footer", "tagline", e.target.value)} className={inputClass} placeholder="Be Golden" />
+              </Field>
+              <Field label="Text pätičky">
+                <Textarea value={content.footer?.text || ""} onChange={(e) => setSection("footer", "text", e.target.value)} className={inputClass} rows={3} />
+              </Field>
+            </SectionShell>
+          )}
+        </div>
       </div>
     </div>
   )

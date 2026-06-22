@@ -39,6 +39,8 @@ export interface PageContent {
     title: string
     subtitle?: string
     paragraphs: string[]
+    /** Rich text story body. When non-empty, takes precedence over paragraphs. */
+    body?: string
     /** Section show/hide. Undefined or true = visible. */
     visible?: boolean
   }
@@ -86,6 +88,12 @@ export interface PageContent {
     iosLink?: string
     androidText?: string
     androidLink?: string
+    /** App/phone image shown in the section. Empty = safe default image. */
+    imageSrc?: string
+    imageAlt?: string
+    imageCaption?: string
+    /** Hide the image and use a balanced single-column layout. Default shown. */
+    showImage?: boolean
     visible?: boolean
   }
   contact: {

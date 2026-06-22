@@ -1,5 +1,7 @@
 import { Heart, Leaf, Bike } from "lucide-react"
 import { Reveal } from "@/components/reveal"
+import { RichText } from "@/components/rich-text"
+import { isRichTextEmpty } from "@/lib/rich-text"
 import type { PageContent } from "@/lib/types"
 
 const values = [
@@ -41,11 +43,15 @@ export function About({ content }: AboutProps) {
             <h2 className="font-heading text-4xl md:text-5xl font-bold text-[#28170F] mb-6 uppercase tracking-wide text-balance">
               {about.title || "Káva s poslaním"}
             </h2>
-            <div className="font-body space-y-4 text-[#28170F]/80 leading-relaxed text-pretty">
-              {(about.paragraphs || []).map((paragraph, index) => (
-                <p key={index}>{paragraph}</p>
-              ))}
-            </div>
+            {about.body && !isRichTextEmpty(about.body) ? (
+              <RichText value={about.body} tone="dark" />
+            ) : (
+              <div className="font-body space-y-4 text-[#28170F]/80 leading-relaxed text-pretty">
+                {(about.paragraphs || []).map((paragraph, index) => (
+                  <p key={index}>{paragraph}</p>
+                ))}
+              </div>
+            )}
           </Reveal>
 
           <div className="space-y-5">

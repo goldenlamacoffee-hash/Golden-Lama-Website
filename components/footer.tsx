@@ -1,6 +1,7 @@
 import Link from "next/link"
 import Image from "next/image"
 import { Instagram, Facebook, Mail, Phone, MapPin } from "lucide-react"
+import { RichText } from "@/components/rich-text"
 import type { PageContent } from "@/lib/types"
 
 interface FooterProps {
@@ -45,10 +46,17 @@ export function Footer({ content }: FooterProps) {
               </span>
             </Link>
             <p className="font-accent text-2xl text-primary mb-4">{footer.tagline || "Be Golden"}</p>
-            <p className="font-body text-sm text-muted-foreground leading-relaxed max-w-sm text-pretty">
-              {footer.text ||
-                "Remeselná káva na kolesách. Prinášame výnimočnú kávu priamo k ľuďom, ktorí ju milujú — na trhoch, podujatiach a po celom meste."}
-            </p>
+            <RichText
+              value={footer.text}
+              tone="light"
+              className="text-sm max-w-sm"
+              fallback={
+                <p className="font-body text-sm text-muted-foreground leading-relaxed max-w-sm text-pretty">
+                  Remeselná káva na kolesách. Prinášame výnimočnú kávu priamo k ľuďom, ktorí ju milujú — na trhoch,
+                  podujatiach a po celom meste.
+                </p>
+              }
+            />
           </div>
 
           {/* Navigation */}

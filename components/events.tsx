@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Reveal } from "@/components/reveal"
+import { RichText } from "@/components/rich-text"
 import { CalendarHeart, Briefcase, Store, PartyPopper, ArrowRight } from "lucide-react"
 import type { PageContent } from "@/lib/types"
 
@@ -45,10 +46,18 @@ export function Events({ content }: EventsProps) {
             <h2 className="font-heading text-4xl md:text-5xl font-bold text-foreground mb-6 uppercase tracking-wide text-balance">
               {events.title || "Golden Lama na vašej akcii"}
             </h2>
-            <p className={`font-body text-muted-foreground leading-relaxed text-pretty ${showCta ? "mb-8" : ""}`}>
-              {events.description ||
-                "Prineste zážitok z remeselnej kávy priamo k vašim hosťom. Náš kávový bicykel rozžiari každú udalosť — od intímnych osláv po veľké festivaly."}
-            </p>
+            <div className={showCta ? "mb-8" : ""}>
+              <RichText
+                value={events.description}
+                tone="light"
+                fallback={
+                  <p className="font-body text-muted-foreground leading-relaxed text-pretty">
+                    Prineste zážitok z remeselnej kávy priamo k vašim hosťom. Náš kávový bicykel rozžiari každú
+                    udalosť — od intímnych osláv po veľké festivaly.
+                  </p>
+                }
+              />
+            </div>
             {showCta && (
               <Button
                 asChild

@@ -1,6 +1,7 @@
 import { Mail, Instagram, Phone } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Reveal } from "@/components/reveal"
+import { RichText } from "@/components/rich-text"
 import Link from "next/link"
 import type { PageContent } from "@/lib/types"
 
@@ -29,9 +30,16 @@ export function Contact({ content }: ContactProps) {
           <h2 className="font-heading text-4xl md:text-5xl font-bold text-foreground mb-6 uppercase tracking-wide text-balance">
             {contact.title || "Spojte sa s nami"}
           </h2>
-          <p className="font-body text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed text-pretty">
-            {contact.subtitle || "Máte otázky alebo chcete nás pozvať na vaše podujatie? Napíšte nám — radi sa ozveme."}
-          </p>
+          <RichText
+            value={contact.subtitle}
+            tone="light"
+            className="max-w-xl mx-auto mb-10"
+            fallback={
+              <p className="font-body text-muted-foreground max-w-xl mx-auto mb-10 leading-relaxed text-pretty">
+                Máte otázky alebo chcete nás pozvať na vaše podujatie? Napíšte nám — radi sa ozveme.
+              </p>
+            }
+          />
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10">
             <Button

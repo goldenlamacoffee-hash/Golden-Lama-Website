@@ -194,4 +194,128 @@
       scroll-behavior: auto;
     }
   }
+
+  /* ---- Brand-safe rich text (CMS) ---- */
+  /* Default typography always matches the Golden Lama design manual; editors
+     can only opt into the brand-approved presets below. */
+  .gl-prose {
+    font-family: var(--font-body);
+    line-height: 1.6;
+  }
+  /* Base text color follows the host section; brand color presets still win. */
+  .gl-prose-dark {
+    color: rgba(40, 23, 15, 0.8);
+  }
+  .gl-prose-light {
+    color: var(--muted-foreground);
+  }
+  .gl-prose > :first-child {
+    margin-top: 0;
+  }
+  .gl-prose > :last-child {
+    margin-bottom: 0;
+  }
+  .gl-prose p {
+    margin: 0 0 1rem;
+    text-wrap: pretty;
+  }
+  .gl-prose h3 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+    font-size: 1.5rem;
+    line-height: 1.2;
+    margin: 1.5rem 0 0.75rem;
+  }
+  .gl-prose h4 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 1.15rem;
+    line-height: 1.3;
+    margin: 1.25rem 0 0.5rem;
+  }
+  .gl-prose ul,
+  .gl-prose ol {
+    margin: 0 0 1rem;
+    padding-left: 1.5rem;
+  }
+  .gl-prose ul {
+    list-style: disc;
+  }
+  .gl-prose ol {
+    list-style: decimal;
+  }
+  .gl-prose li {
+    margin: 0.25rem 0;
+  }
+  .gl-prose strong {
+    font-weight: 700;
+  }
+  .gl-prose em {
+    font-style: italic;
+  }
+  .gl-prose a {
+    color: #e09e14;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    font-weight: 600;
+    transition: opacity 0.2s ease;
+  }
+  .gl-prose a:hover {
+    opacity: 0.8;
+  }
+
+  /* Brand-approved text colors */
+  .gl-prose .gl-c-espresso {
+    color: #28170f;
+  }
+  .gl-prose .gl-c-gold {
+    color: #e09e14;
+  }
+  .gl-prose .gl-c-taupe {
+    color: #8c6f4e;
+  }
+  .gl-prose .gl-c-cream {
+    color: #f5e3c2;
+  }
+
+  /* Brand-approved text sizes / emphasis */
+  .gl-prose .gl-text-small {
+    font-size: 0.875rem;
+  }
+  .gl-prose .gl-text-normal {
+    font-size: 1rem;
+  }
+  .gl-prose .gl-text-large {
+    font-size: 1.25rem;
+  }
+  .gl-prose .gl-text-highlight {
+    font-family: var(--font-accent);
+    color: #e09e14;
+    font-size: 1.25rem;
+  }
+
+  /* Simple alignment presets */
+  .gl-prose .gl-align-left {
+    text-align: left;
+  }
+  .gl-prose .gl-align-center {
+    text-align: center;
+  }
+  .gl-prose .gl-align-right {
+    text-align: right;
+  }
+
+  /* CMS editor placeholder + readable preview on the dark admin surface. */
+  .gl-editor:empty::before {
+    content: attr(data-placeholder);
+    color: rgba(245, 227, 194, 0.4);
+    pointer-events: none;
+  }
+  .gl-editor.gl-prose-light .gl-c-espresso {
+    /* Espresso text is invisible on the dark editor surface — show a readable
+       proxy while editing; the public site still renders true espresso. */
+    color: #f0d9a8;
+  }
 }

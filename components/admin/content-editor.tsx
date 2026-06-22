@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { RichTextEditor } from "@/components/admin/rich-text-editor"
+import { plainTextToHtml } from "@/lib/rich-text"
 import type { PageContent } from "@/lib/types"
 import {
   Save,
@@ -139,6 +141,7 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
     check("events.ctaLink", content.events?.ctaLink)
     check("app.iosLink", content.app?.iosLink)
     check("app.androidLink", content.app?.androidLink)
+    check("app.imageSrc", content.app?.imageSrc)
     check("contact.facebook", content.contact?.facebook)
     check("contact.tiktok", content.contact?.tiktok)
     check("locationsSection.mapUrl", content.locationsSection?.mapUrl)
@@ -353,21 +356,18 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
               <Field label="Nadpis">
                 <Input value={content.about?.title || ""} onChange={(e) => setAbout("title", e.target.value)} className={inputClass} placeholder="Káva s poslaním" />
               </Field>
-              <Field label="Odseky textu">
-                <div className="space-y-2">
-                  {(content.about?.paragraphs || []).map((para, index) => (
-                    <div key={`para-${index}`} className="flex gap-2">
-                      <Textarea value={para} onChange={(e) => updateParagraph(index, e.target.value)} className={inputClass} rows={2} />
-                      <Button onClick={() => removeParagraph(index)} variant="ghost" size="sm" className="text-red-400 hover:text-red-300 hover:bg-red-400/10 shrink-0">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button onClick={addParagraph} variant="outline" size="sm" className="border-[#8C6F4E]/50 text-[#F5E3C2] hover:bg-[#8C6F4E]/20">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Pridať odsek
-                  </Button>
-                </div>
+              <Field
+                label="Text príbehu"
+                hint="Formátovaný text sekcie Príbeh. Existujúce odseky sa načítali automaticky — upravte ich a uložte."
+              >
+                <RichTextEditor
+                  value={
+                    content.about?.body ??
+                    plainTextToHtml((content.about?.paragraphs || []).join("\n\n"))
+                  }
+                  onChange={(html) => setAbout("body", html)}
+                  placeholder="Napíšte príbeh značky…"
+                />
               </Field>
             </SectionShell>
           )}
@@ -447,8 +447,12 @@ export function ContentEditor({ content, setContent }: ContentEditorProps) {
               <Field label="Nadpis">
                 <Input value={content.events?.title || ""} onChange={(e) => setSection("events", "title", e.target.value)} className={inputClass} placeholder="Golden Lama na vašej akcii" />
               </Field>
-              <Field label="Popis">
-                <Textarea value={content.events?.description || ""} onChange={(e) => setSection("events", "description", e.target.value)} className={inputClass} rows={3} />
+              <Field label="Popis" hint="Formátovaný text. Prázdne = bezpečný predvolený text.">
+                <RichTextEditor
+                  value={content.events?.description}
+                  onChange={(html) => setSection("events", "description", html)}
+                  placeholder="Popíšte ponuku pre akcie…"
+                />
               </Field>
               <div className="grid sm:grid-cols-2 gap-3">
                 <Field label="Text tlačidla">

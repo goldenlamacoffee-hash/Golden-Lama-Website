@@ -1,7 +1,11 @@
 import type { Metadata } from 'next'
 import { Raleway, Exo_2, Pacifico } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { GoogleAnalytics } from '@next/third-parties/google'
 import './globals.css'
+
+// Google Analytics 4 measurement ID. Configurable via env, with a safe default.
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-E51GRQTZ6T'
 
 const raleway = Raleway({ 
   subsets: ["latin", "latin-ext"],
@@ -96,6 +100,9 @@ export default function RootLayout({
         {children}
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
+      {process.env.NODE_ENV === 'production' && GA_MEASUREMENT_ID && (
+        <GoogleAnalytics gaId={GA_MEASUREMENT_ID} />
+      )}
     </html>
   )
 }

@@ -14,6 +14,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next()
   }
 
+  // Search-engine / domain verification files must stay publicly reachable even
+  // while the password gate is active (crawlers can't pass the unlock page).
+  if (/^\/google[0-9a-f]+\.html$/.test(pathname) || pathname === "/robots.txt" || pathname === "/sitemap.xml") {
+    return NextResponse.next()
+  }
+
   const sitePassword = process.env.SITE_PASSWORD
   // Fail open if no password is configured, so the site is never unintentionally
   // locked (e.g. in a fresh environment without the env var set).

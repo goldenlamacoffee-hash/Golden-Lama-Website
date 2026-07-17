@@ -1,5 +1,20 @@
 import ExcelJS from 'exceljs'
-import { EU_ALLERGENS } from './haccp'
+import {
+  getDailyChecks,
+  getTemperatureRecords,
+  getSanitationRecords,
+  getWaterRecords,
+  getReceivingRecords,
+  getDiscardRecords,
+  getNonConformities,
+  getPestControlRecords,
+  getMaintenanceRecords,
+  getTrainingRecords,
+  getSuppliers,
+  getAllergenMatrix,
+  getManualVersions,
+  EU_ALLERGENS,
+} from './haccp'
 
 const BRAND_DARK = 'FF28170F'
 const BRAND_GOLD = 'FFE09E14'
@@ -41,7 +56,7 @@ function addRows(ws: ExcelJS.Worksheet, startRow: number, rows: Row[], keys: str
     const r = ws.getRow(startRow + ri)
     keys.forEach((key, ci) => {
       const val = row[key]
-      r.getCell(ci + 1).value = val === null || val === undefined ? '' : val instanceof Date ? val : String(val)
+      r.getCell(ci + 1).value = val === null || val === undefined ? '' : (typeof val === 'object' && (val as object) instanceof Date) ? (val as Date) : String(val)
     })
     if (ri % 2 === 1) {
       r.eachCell(c => {
@@ -313,6 +328,88 @@ export function addTrainingSheet(wb: ExcelJS.Workbook, records: Row[], range: st
   autoWidth(ws)
 }
 
+// ─── Individual export entry points (used by /api/admin/haccp/exports) ────────
+
+async function buildSingle(
+  fetcher: () => Promise<Row[]>,
+  builder: (wb: ExcelJS.Workbook, rows: Row[], range: string) => void,
+  from: string,
+  to: string
+): Promise<Buffer> {
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Golden Lama – HACCP Admin'
+  wb.created = new Date()
+  const rows = await fetcher()
+  builder(wb, rows, `${from} – ${to}`)
+  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
+}
+
+export async function exportDailyChecks(from: string, to: string) {
+  return buildSingle(() => getDailyChecks({ from, to }), addDailyChecksSheet, from, to)
+}
+export async function exportTemperatures(from: string, to: string) {
+  return buildSingle(() => getTemperatureRecords({ from, to }), addTemperaturesSheet, from, to)
+}
+export async function exportSanitation(from: string, to: string) {
+  return buildSingle(() => getSanitationRecords({ from, to }), addSanitationSheet, from, to)
+}
+export async function exportWaterChecks(from: string, to: string) {
+  return buildSingle(() => getWaterRecords({ from, to }), addWaterSheet, from, to)
+}
+export async function exportReceiving(from: string, to: string) {
+  return buildSingle(() => getReceivingRecords({ from, to }), addReceivingSheet, from, to)
+}
+export async function exportDiscards(from: string, to: string) {
+  return buildSingle(() => getDiscardRecords({ from, to }), addDiscardsSheet, from, to)
+}
+export async function exportNonConformities(from: string, to: string) {
+  return buildSingle(() => getNonConformities({ from, to }), addNonConformitiesSheet, from, to)
+}
+export async function exportPestControl(from: string, to: string) {
+  return buildSingle(() => getPestControlRecords({ from, to }), addPestControlSheet, from, to)
+}
+export async function exportMaintenance(from: string, to: string) {
+  return buildSingle(() => getMaintenanceRecords({ from, to }), addMaintenanceSheet, from, to)
+}
+export async function exportTraining(from: string, to: string) {
+  return buildSingle(() => getTrainingRecords({ from, to }), addTrainingSheet, from, to)
+}
+
+export async function exportFullInspectionReport(from: string, to: string): Promise<Buffer> {
+  const [checks, temps, san, water, recv, discards, nc, pest, maint, training, suppliers, matrix, manuals] =
+    await Promise.all([
+      getDailyChecks({ from, to }),
+      getTemperatureRecords({ from, to }),
+      getSanitationRecords({ from, to }),
+      getWaterRecords({ from, to }),
+      getReceivingRecords({ from, to }),
+      getDiscardRecords({ from, to }),
+      getNonConformities({ from, to }),
+      getPestControlRecords({ from, to }),
+      getMaintenanceRecords({ from, to }),
+      getTrainingRecords({ from, to }),
+      getSuppliers(),
+      getAllergenMatrix(),
+      getManualVersions(),
+    ])
+  return buildInspectionXlsx({
+    from, to,
+    checks: checks as Row[],
+    temperatures: temps as Row[],
+    sanitation: san as Row[],
+    water: water as Row[],
+    receiving: recv as Row[],
+    discards: discards as Row[],
+    nonConformities: nc as Row[],
+    pestControl: pest as Row[],
+    maintenance: maint as Row[],
+    suppliers: suppliers as Row[],
+    allergenMatrix: matrix,
+    training: training as Row[],
+    manualVersions: manuals as Row[],
+  })
+}
+
 // ─── Full inspection package ──────────────────────────────────────────────────
 
 export async function buildInspectionXlsx(data: {
@@ -349,7 +446,7 @@ export async function buildInspectionXlsx(data: {
   cover.getCell('A6').value = activeManual ? `${activeManual.version} – ${activeManual.title} (${fmtDate(activeManual.effective_date)})` : '(Žiadna aktívna verzia)'
   cover.getCell('A8').value = 'Tento dokument je generovaný z operačných záznamov a nenahrádza originál HACCP manuálu.'
   cover.getCell('A8').font = { italic: true, size: 9, color: { argb: 'FF888888' } }
-  cover.column(1).width = 70
+  cover.getColumn(1).width = 70
 
   addDailyChecksSheet(wb, data.checks, range)
   addTemperaturesSheet(wb, data.temperatures, range)
@@ -364,5 +461,5 @@ export async function buildInspectionXlsx(data: {
   addAllergenMatrixSheet(wb, data.allergenMatrix)
   addTrainingSheet(wb, data.training, range)
 
-  return (await wb.xlsx.writeBuffer()) as Buffer
+  return (await wb.xlsx.writeBuffer()) as unknown as Buffer
 }

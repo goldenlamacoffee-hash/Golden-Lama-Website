@@ -31,6 +31,7 @@ export default async function AdminPage() {
       canViewOwnPoints={can(user.role, 'motivation:read_own')}
       canViewReports={can(user.role, 'reports:view')}
       canViewAppAdmin={canViewAppAdmin}
+      canViewHaccp={can(user.role, 'haccp:view')}
       appAdminUrl={appAdminUrl}
     />
   )

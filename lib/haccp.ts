@@ -416,7 +416,7 @@ export async function insertWaterRecord(params: {
   return r.rows[0]
 }
 
-// ─── Suppliers ────────────────────────────────────────────────────────────────
+// ─── Suppliers ─────────────────────���──────────────────────────────────────────
 
 export async function getSuppliers(activeOnly = false) {
   const r = await pool.query(
@@ -883,16 +883,21 @@ export async function setAllergenOverride(params: {
 
 // ─── Training ─────────────────────────────────────────────────────────────────
 
-export async function getTrainingRecords(params?: { employeeId?: string }) {
+export async function getTrainingRecords(params?: { employeeId?: string; from?: string; to?: string }) {
   const conditions: string[] = []
-  const values: string[] = []
-  if (params?.employeeId) { conditions.push(`employee_id=$1`); values.push(params.employeeId) }
+  const values: (string | number)[] = []
+  if (params?.employeeId) { conditions.push(`employee_id=$${values.length+1}`); values.push(params.employeeId) }
+  if (params?.from) { conditions.push(`training_date >= $${values.length+1}`); values.push(params.from) }
+  if (params?.to) { conditions.push(`training_date <= $${values.length+1}`); values.push(params.to) }
   const r = await pool.query(
     `SELECT * FROM haccp_training_records${conditions.length ? ' WHERE '+conditions.join(' AND ') : ''} ORDER BY training_date DESC`,
     values
   )
   return r.rows
 }
+
+/** Alias so route files can call createTrainingRecord */
+export { insertTrainingRecord as createTrainingRecord }
 
 export async function insertTrainingRecord(params: {
   employeeId?: string | null
@@ -995,6 +1000,54 @@ export async function setHaccpSetting(key: string, value: unknown, userId?: stri
     [key, JSON.stringify(value), userId ?? null]
   )
 }
+
+// ─── Allergen declarations (convenience wrappers used by the allergens route) ─
+
+export async function getAllergenDeclarations(recipeId?: string) {
+  const r = await pool.query(
+    recipeId
+      ? `SELECT ad.*, r.name as recipe_name FROM haccp_allergen_declarations ad JOIN haccp_recipes r ON r.id=ad.recipe_id WHERE ad.recipe_id=$1`
+      : `SELECT ad.*, r.name as recipe_name FROM haccp_allergen_declarations ad JOIN haccp_recipes r ON r.id=ad.recipe_id ORDER BY r.name`,
+    recipeId ? [recipeId] : []
+  )
+  return r.rows
+}
+
+export async function upsertAllergenDeclaration(params: {
+  id?: string
+  recipeId: string
+  allergenOverride?: Record<string, string>
+  reason?: string
+  updatedBy?: string | null
+}) {
+  if (params.id) {
+    const r = await pool.query(
+      `UPDATE haccp_allergen_declarations SET allergen_override=$2, reason=$3, updated_by=$4, updated_at=now() WHERE id=$1 RETURNING *`,
+      [params.id, JSON.stringify(params.allergenOverride ?? {}), params.reason ?? null, params.updatedBy ?? null]
+    )
+    return r.rows[0]
+  }
+  const r = await pool.query(
+    `INSERT INTO haccp_allergen_declarations (recipe_id, allergen_override, reason, updated_by) VALUES ($1,$2,$3,$4)
+     ON CONFLICT (recipe_id) DO UPDATE SET allergen_override=$2, reason=$3, updated_by=$4, updated_at=now()
+     RETURNING *`,
+    [params.recipeId, JSON.stringify(params.allergenOverride ?? {}), params.reason ?? null, params.updatedBy ?? null]
+  )
+  return r.rows[0]
+}
+
+// ─── HACCP manual convenience wrappers ────────────────────────────────────────
+
+/** Returns the latest active manual version, or most recent if none active. */
+export async function getHaccpManual() {
+  const r = await pool.query(
+    `SELECT * FROM haccp_manual_versions ORDER BY status='active' DESC, created_at DESC LIMIT 10`
+  )
+  return r.rows
+}
+
+/** Alias so the manual route can use a single function name. */
+export { upsertManualVersion as upsertHaccpManual }
 
 // ─── Audit log ────────────────────────────────────────────────────────────────
 

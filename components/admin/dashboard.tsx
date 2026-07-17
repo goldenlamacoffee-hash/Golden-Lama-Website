@@ -13,7 +13,7 @@ import { LegalEditor } from "./legal-editor"
 import type { SiteData } from "@/lib/types"
 import type { AdminRole } from "@/lib/permissions"
 import { ROLE_LABELS } from "@/lib/permissions"
-import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, CalendarClock, CalendarOff, ExternalLink, Smartphone, Package, Trophy, Sparkles, FileSpreadsheet } from "lucide-react"
+import { LogOut, Coffee, MapPin, Image as ImageIcon, FileText, Shield, ScrollText, Users, Lock, CalendarDays, CalendarClock, CalendarOff, ExternalLink, Smartphone, Package, Trophy, Sparkles, FileSpreadsheet, ClipboardList } from "lucide-react"
 
 interface AdminDashboardProps {
   initialData: SiteData
@@ -27,6 +27,7 @@ interface AdminDashboardProps {
   canViewOwnPoints: boolean
   canViewReports: boolean
   canViewAppAdmin: boolean
+  canViewHaccp: boolean
   appAdminUrl: string
 }
 
@@ -42,6 +43,7 @@ export function AdminDashboard({
   canViewOwnPoints,
   canViewReports,
   canViewAppAdmin,
+  canViewHaccp,
   appAdminUrl,
 }: AdminDashboardProps) {
   const [data, setData] = useState(initialData)
@@ -150,6 +152,15 @@ export function AdminDashboard({
               >
                 <FileSpreadsheet className="h-4 w-4" />
                 Reporty
+              </a>
+            )}
+            {canViewHaccp && (
+              <a
+                href="/admin/haccp"
+                className="text-[#8C6F4E] hover:text-[#E09E14] text-sm flex items-center gap-1"
+              >
+                <ClipboardList className="h-4 w-4" />
+                HACCP
               </a>
             )}
             <a 
@@ -326,6 +337,25 @@ export function AdminDashboard({
               <a href="/admin/reports">
                 Otvoriť reporty
                 <FileSpreadsheet className="h-4 w-4 ml-2" />
+              </a>
+            </Button>
+          </div>
+        )}
+        {canViewHaccp && (
+          <div className="mb-6 flex flex-col gap-4 rounded-lg border border-[#8C6F4E]/30 bg-[#3a251a] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#E09E14]/15">
+                <ClipboardList className="h-5 w-5 text-[#E09E14]" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg text-[#F5E3C2] leading-tight">HACCP</h2>
+                <p className="text-sm text-[#8C6F4E]">Denné kontroly, teploty, sanitácia, príjem surovín a dokumentácia</p>
+              </div>
+            </div>
+            <Button asChild className="bg-[#E09E14] text-[#28170F] hover:bg-[#E09E14]/90 shrink-0">
+              <a href="/admin/haccp">
+                Otvoriť HACCP
+                <ClipboardList className="h-4 w-4 ml-2" />
               </a>
             </Button>
           </div>

@@ -1,6 +1,6 @@
 import { getCurrentUser } from '@/lib/auth'
 import { can } from '@/lib/permissions'
-import { SanitationPage } from '@/components/admin/haccp/sanitation-page'
+import { SanitationPage } from '@/components/admin/haccp/sanitation'
 
 export const dynamic = 'force-dynamic'
 

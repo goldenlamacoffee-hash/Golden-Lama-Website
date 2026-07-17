@@ -24,7 +24,7 @@ interface HaccpDashboardProps {
   summary: DashboardSummary
   today: string
   canWrite: boolean
-  canSettings: boolean
+  canSettings?: boolean
 }
 
 function StatusBadge({ ok, label }: { ok: boolean; label: string }) {

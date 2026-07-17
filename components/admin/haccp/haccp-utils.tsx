@@ -3,6 +3,67 @@
 import { useState, useRef } from 'react'
 import { X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
+// ─── SWR fetcher ─────────────────────────────────────────────────────────────
+
+export const swrFetcher = (url: string) => fetch(url).then(r => r.json())
+
+// ─── Card wrapper ─────────────────────────────────────────────────────────────
+
+export function HaccpCard({
+  children,
+  className,
+  onClick,
+}: {
+  children: React.ReactNode
+  className?: string
+  onClick?: () => void
+}) {
+  return (
+    <div
+      className={`rounded-xl border border-[#8C6F4E]/20 bg-[#3a251a] px-5 py-4 ${onClick ? 'cursor-pointer hover:border-[#E09E14]/40 transition-colors' : ''} ${className ?? ''}`}
+      onClick={onClick}
+    >
+      {children}
+    </div>
+  )
+}
+
+// ─── Empty state (component-style, with icon as ReactNode) ────────────────────
+
+export function HaccpEmptyState({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode
+  title: string
+  description?: string
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 text-center text-[#8C6F4E]">
+      <div className="mb-3 opacity-40">{icon}</div>
+      <p className="text-sm font-medium text-[#F5E3C2]/60">{title}</p>
+      {description && <p className="text-xs mt-1 text-[#8C6F4E]">{description}</p>}
+    </div>
+  )
+}
+
+// ─── Status badge for ok / deviation / critical ───────────────────────────────
+
+export function HaccpStatusBadge({ result }: { result: 'ok' | 'deviation' | 'critical' }) {
+  const map = {
+    ok:        { label: 'OK',         cls: 'bg-green-900/40 text-green-300' },
+    deviation: { label: 'Odchýlka',   cls: 'bg-amber-900/40 text-amber-300' },
+    critical:  { label: 'Kritická',   cls: 'bg-red-900/40 text-red-300' },
+  } as const
+  const { label, cls } = map[result] ?? map.ok
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${cls}`}>
+      {label}
+    </span>
+  )
+}
+
 // ─── Date range picker ────────────────────────────────────────────────────────
 
 export function getMonthRange(offset = 0) {
@@ -50,35 +111,82 @@ export function DateRangeNav({
 }
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
+// Accepts both usage patterns:
+//   • Simple:  open/onOpenChange/onSubmit/saving/error (most components)
+//   • Minimal: title/onClose/children (direct children rendering)
+
+type HaccpModalProps = {
+  title: string
+  children: React.ReactNode
+  // pattern A – controlled with submit handler
+  open?: boolean
+  onOpenChange?: (v: boolean) => void
+  onSubmit?: () => void | Promise<void>
+  saving?: boolean
+  error?: string
+  // pattern B – simple close callback
+  onClose?: () => void
+}
 
 export function HaccpModal({
   title,
-  onClose,
   children,
-}: {
-  title: string
-  onClose: () => void
-  children: React.ReactNode
-}) {
+  open,
+  onOpenChange,
+  onSubmit,
+  saving,
+  error,
+  onClose,
+}: HaccpModalProps) {
+  // If using controlled open prop and it's false, render nothing
+  if (open === false) return null
+
+  const handleClose = () => {
+    onOpenChange?.(false)
+    onClose?.()
+  }
+
   const overlayRef = useRef<HTMLDivElement>(null)
+
   return (
     <div
       ref={overlayRef}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4"
-      onClick={e => { if (e.target === overlayRef.current) onClose() }}
+      onClick={e => { if (e.target === overlayRef.current) handleClose() }}
     >
       <div className="relative w-full max-w-lg rounded-2xl border border-[#8C6F4E]/30 bg-[#28170F] shadow-2xl my-8">
         <div className="flex items-center justify-between border-b border-[#8C6F4E]/20 px-5 py-4">
           <h2 className="font-heading text-lg text-[#F5E3C2]">{title}</h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="rounded-lg p-1.5 text-[#8C6F4E] hover:bg-[#8C6F4E]/20 transition-colors"
             aria-label="Zavrieť"
           >
             <X className="h-4 w-4" />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-5 py-4 space-y-4">
+          {error && (
+            <p className="rounded-lg bg-red-900/30 border border-red-700/40 px-3 py-2 text-xs text-red-300">{error}</p>
+          )}
+          {children}
+          {onSubmit && (
+            <div className="flex justify-end gap-3 pt-1 border-t border-[#8C6F4E]/20">
+              <button type="button" onClick={handleClose} className="px-4 py-2 text-sm text-[#8C6F4E] hover:text-[#F5E3C2] transition-colors">
+                Zrušiť
+              </button>
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-lg bg-[#E09E14] px-5 py-2.5 text-sm font-semibold text-[#28170F] hover:bg-[#E09E14]/90 disabled:opacity-60 transition-colors"
+              >
+                {saving && <Loader2 className="h-4 w-4 animate-spin" />}
+                Uložiť
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

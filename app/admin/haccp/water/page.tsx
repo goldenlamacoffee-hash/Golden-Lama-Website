@@ -1,6 +1,6 @@
 import { getCurrentUser } from '@/lib/auth'
 import { can } from '@/lib/permissions'
-import { WaterPage } from '@/components/admin/haccp/water-page'
+import { WaterPage } from '@/components/admin/haccp/water'
 
 export const dynamic = 'force-dynamic'
 

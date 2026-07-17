@@ -1,14 +1,10 @@
 import { getCurrentUser } from '@/lib/auth'
 import { can } from '@/lib/permissions'
-import { DailyChecksPage } from '@/components/admin/haccp/daily-checks'
+import { MaintenancePage } from '@/components/admin/haccp/maintenance'
 
 export const dynamic = 'force-dynamic'
 
 export default async function Page() {
   const user = await getCurrentUser()
-  return (
-    <DailyChecksPage
-      canWrite={can(user!.role, 'haccp:write')}
-    />
-  )
+  return <MaintenancePage canWrite={can(user!.role, 'haccp:write')} />
 }

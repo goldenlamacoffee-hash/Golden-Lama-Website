@@ -39,6 +39,12 @@ export type Capability =
   | 'reports:inventory' // export inventory movements
   | 'reports:points' // export Golden Points (sensitive bonus/payroll)
   | 'reports:users' // export user list
+  // HACCP operational management
+  | 'haccp:view' // view dashboard and all HACCP records
+  | 'haccp:write' // create / complete operational records
+  | 'haccp:correct' // correct completed records (requires audit reason)
+  | 'haccp:settings' // manage equipment, templates, limits, suppliers, ingredients
+  | 'haccp:exports' // generate XLSX / inspection reports
 
 const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
   owner: [
@@ -66,6 +72,11 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'reports:inventory',
     'reports:points',
     'reports:users',
+    'haccp:view',
+    'haccp:write',
+    'haccp:correct',
+    'haccp:settings',
+    'haccp:exports',
   ],
   admin: [
     'cms:read',
@@ -92,6 +103,11 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'reports:inventory',
     'reports:points',
     'reports:users',
+    'haccp:view',
+    'haccp:write',
+    'haccp:correct',
+    'haccp:settings',
+    'haccp:exports',
   ],
   manager: [
     'cms:read',
@@ -109,9 +125,12 @@ const ROLE_CAPABILITIES: Record<AdminRole, Capability[]> = {
     'reports:shifts',
     'reports:absences',
     'reports:inventory',
+    'haccp:view',
+    'haccp:write',
+    'haccp:exports',
   ],
   content_editor: ['cms:read', 'cms:write'],
-  staff: ['cms:read', 'calendar:read_own', 'motivation:read_own'],
+  staff: ['cms:read', 'calendar:read_own', 'motivation:read_own', 'haccp:write'],
 }
 
 export function can(role: AdminRole | undefined | null, capability: Capability): boolean {
